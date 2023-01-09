@@ -114,9 +114,10 @@ public class QueryHelper {
         final String joinType = join.getType().toString();
         final String fromTable = join.getFromTable();
         final String joinTable = join.getJoinTable();
-        final String column = join.getColumn();
+        final String fromColumn = join.getFromColumn();
+        final String joinColumn = join.getJoinColumn();
 
-        return joinType + " JOIN " + joinTable + " ON " + joinTable + "." + column + " = " + fromTable + "." + column;
+        return joinType + " JOIN " + joinTable + " ON " + joinTable + "." + joinColumn + " = " + fromTable + "." + fromColumn;
     };
 
     private static final Function<WhereCriteria, String> toWhereCriteria = (criteria) -> {
