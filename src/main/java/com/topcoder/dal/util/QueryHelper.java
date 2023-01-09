@@ -12,17 +12,19 @@ import java.util.stream.Stream;
 public class QueryHelper {
 
     public String getSelectQuery(SelectQuery query) {
-        final String tableName = query.getTable();
+        final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
 
         List<Column> columnsList = query.getColumnList();
 
         final String[] columns = columnsList.stream()
-                .map(Column::getName)
+                .map((column -> column.hasTableName() ? column.getTableName() + "." + column.getName() : column.getName()))
                 .toArray(String[]::new);
 
         final String[] whereClause = query.getWhereList().stream()
                 .map(toWhereCriteria)
                 .toArray(String[]::new);
+
+        final Join[] joins = query.getJoinList().toArray(new Join[0]);
 
         final String[] groupByClause = query.getGroupByList().toArray(new String[0]);
         final String[] orderByClause = query.getOrderByList().toArray(new String[0]);
@@ -30,17 +32,16 @@ public class QueryHelper {
         final int limit = query.getLimit();
         final int offset = query.getOffset();
 
-        // SELECT SKIP 10 FIRST 5 * FROM table // informix
-        // SELECT * FROM table LIMIT 5 OFFSET 10; // postgres
-
         return "SELECT"
                 + (offset > 0 ? " SKIP " + offset : "")
                 + (limit > 0 ? " FIRST " + limit : "")
                 + (" " + String.join(",", columns) + " FROM " + tableName)
+                + (joins.length > 0 ? " " + String.join(" ", Stream.of(joins).map(toJoin).toArray(String[]::new)) : "")
                 + (whereClause.length > 0 ? " WHERE " + String.join(" AND ", whereClause) : "")
                 + (groupByClause.length > 0 ? " GROUP BY " + String.join(",", groupByClause) : "")
                 + (orderByClause.length > 0 ? " ORDER BY " + String.join(",", orderByClause) : "");
     }
+
 
     public String getInsertQuery(InsertQuery query) {
         return getInsertQuery(query, null, null);
@@ -89,7 +90,7 @@ public class QueryHelper {
 
         return "UPDATE "
                 + tableName
-                + " SET " + String.join(",", zip(columns, values, (c, v) -> c + "=" + v))
+                + " SET " + String.join(",", zip(columns, values, (c, v) -> c + "=" + "'" + v + "'"))
                 + " WHERE " + String.join(" AND ", whereClause);
     }
 
@@ -108,6 +109,15 @@ public class QueryHelper {
                 + tableName
                 + " WHERE " + String.join(" AND ", whereClause);
     }
+
+    private static final Function<Join, String> toJoin = (join) -> {
+        final String joinType = join.getType().toString();
+        final String fromTable = join.getFromTable();
+        final String joinTable = join.getJoinTable();
+        final String column = join.getColumn();
+
+        return joinType + " JOIN " + joinTable + " ON " + joinTable + "." + column + " = " + fromTable + "." + column;
+    };
 
     private static final Function<WhereCriteria, String> toWhereCriteria = (criteria) -> {
         String key = criteria.getKey();

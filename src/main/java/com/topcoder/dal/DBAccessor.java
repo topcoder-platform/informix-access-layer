@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Objects;
 
+
 /**
  * Accessor for rational database like Informix.
  */
@@ -90,6 +91,9 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
         return result;
     }
 
+    // UPDATE X, SET VALUE = NULL;
+    // SELECT * FROM X WHERE VALUE = null;
+
     @Override
     public void query(QueryRequest request, StreamObserver<QueryResponse> responseObserver) {
         Query query = request.getQuery();
@@ -103,7 +107,11 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             }
             case SELECT -> {
                 final SelectQuery selectQuery = query.getSelect();
+                System.out.println("Table Name: " + selectQuery.getTable());
                 final String sql = queryHelper.getSelectQuery(selectQuery);
+
+                System.out.println("SQL: " + sql);
+
                 final List<Column> columnList = selectQuery.getColumnList();
                 final int numColumns = columnList.size();
                 final ColumnType[] columnTypeMap = new ColumnType[numColumns];
@@ -123,7 +131,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                             case STRING ->
                                     valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getString(i + 1), ""));
                             case BOOLEAN -> valueBuilder.setBooleanValue(rs.getBoolean(i + 1));
-                            case DATE, DATETIME -> valueBuilder.setDateValue(rs.getTimestamp(i + 1).toString());
+                            case DATE, DATETIME -> valueBuilder.setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
                             default ->
                                     throw new IllegalArgumentException("Unsupported column type: " + columnTypeMap[i]);
                         }
@@ -166,6 +174,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             case UPDATE -> {
                 final UpdateQuery updateQuery = query.getUpdate();
                 final String sql = queryHelper.getUpdateQuery(updateQuery);
+                System.out.println("SQL: " + sql);
                 final int updateCount = jdbcTemplate.update(sql);
                 response = QueryResponse.newBuilder()
                         .setUpdateResult(UpdateQueryResult.newBuilder().setAffectedRows(updateCount).build())
