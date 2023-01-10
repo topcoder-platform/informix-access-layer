@@ -125,18 +125,18 @@ public class QueryHelper {
         String value = toValue(criteria.getValue());
 
         return switch (criteria.getOperator()) {
-            case EQUAL -> key + "=" + value;
-            case NOT_EQUAL -> key + "<>" + value;
-            case GREATER_THAN -> key + ">" + value;
-            case GREATER_THAN_OR_EQUAL -> key + ">=" + value;
-            case LESS_THAN -> key + "<" + value;
-            case LESS_THAN_OR_EQUAL -> key + "<=" + value;
-            case LIKE -> key + " LIKE " + value;
-            case NOT_LIKE -> key + " NOT LIKE " + value;
-            case IN -> key + " IN (" + value + ")";
-            case NOT_IN -> key + " NOT IN (" + value + ")";
-            case IS_NULL -> key + " IS NULL";
-            case IS_NOT_NULL -> key + " IS NOT NULL";
+            case OPERATOR_EQUAL -> key + "=" + value;
+            case OPERATOR_NOT_EQUAL -> key + "<>" + value;
+            case OPERATOR_GREATER_THAN -> key + ">" + value;
+            case OPERATOR_GREATER_THAN_OR_EQUAL -> key + ">=" + value;
+            case OPERATOR_LESS_THAN -> key + "<" + value;
+            case OPERATOR_LESS_THAN_OR_EQUAL -> key + "<=" + value;
+            case OPERATOR_LIKE -> key + " LIKE " + value;
+            case OPERATOR_NOT_LIKE -> key + " NOT LIKE " + value;
+            case OPERATOR_IN -> key + " IN (" + value + ")";
+            case OPERATOR_NOT_IN -> key + " NOT IN (" + value + ")";
+            case OPERATOR_IS_NULL -> key + " IS NULL";
+            case OPERATOR_IS_NOT_NULL -> key + " IS NOT NULL";
             default -> null;
         };
     };
