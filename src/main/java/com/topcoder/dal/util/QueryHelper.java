@@ -48,7 +48,7 @@ public class QueryHelper {
     }
 
     public String getInsertQuery(InsertQuery query, String idColumn, String idValue) {
-        final String tableName = query.getTable();
+        final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
         final List<ColumnValue> valuesToInsert = query.getColumnValueList();
 
         Stream<String> columnsStream = valuesToInsert.stream()
@@ -74,7 +74,7 @@ public class QueryHelper {
 
 
     public String getUpdateQuery(UpdateQuery query) {
-        final String tableName = query.getTable();
+        final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
 
         final List<ColumnValue> valuesToUpdate = query.getColumnValueList();
         final String[] columns = valuesToUpdate.stream().map(ColumnValue::getColumn).toArray(String[]::new);
@@ -95,7 +95,7 @@ public class QueryHelper {
     }
 
     public String getDeleteQuery(DeleteQuery query) {
-        final String tableName = query.getTable();
+        final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
 
         final String[] whereClause = query.getWhereList().stream()
                 .map(toWhereCriteria)
@@ -112,8 +112,8 @@ public class QueryHelper {
 
     private static final Function<Join, String> toJoin = (join) -> {
         final String joinType = join.getType().toString();
-        final String fromTable = join.getFromTable();
-        final String joinTable = join.getJoinTable();
+        final String fromTable = join.hasFromTableSchema() ? join.getFromTableSchema() + ":" + join.getFromTable() : join.getFromTable();
+        final String joinTable = join.hasJoinTableSchema() ? join.getJoinTableSchema() + ":" + join.getJoinTable() : join.getJoinTable();
         final String fromColumn = join.getFromColumn();
         final String joinColumn = join.getJoinColumn();
 
