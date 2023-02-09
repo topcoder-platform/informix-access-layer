@@ -107,7 +107,6 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             }
             case SELECT -> {
                 final SelectQuery selectQuery = query.getSelect();
-                System.out.println("Table Name: " + selectQuery.getTable());
                 final String sql = queryHelper.getSelectQuery(selectQuery);
 
                 System.out.println("SQL: " + sql);
@@ -159,7 +158,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     sql = queryHelper.getInsertQuery(insertQuery);
                 }
 
-                System.out.println("Insert SQL: " + sql);
+                System.out.println("SQL: " + sql);
                 jdbcTemplate.update(sql);
 
                 InsertQueryResult.Builder insertQueryBuilder = InsertQueryResult.newBuilder();
