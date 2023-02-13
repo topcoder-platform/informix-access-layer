@@ -8,10 +8,22 @@ import jdk.jshell.spi.ExecutionControl;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import javax.transaction.Transaction;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 
 /**
@@ -25,12 +37,20 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
      */
     private final JdbcTemplate jdbcTemplate;
 
+    private final DataSourceTransactionManager transactionManager;
+
+    private final ThreadLocal<TransactionStatus> transactionStatus = new ThreadLocal<>();
+
+
     private final QueryHelper queryHelper;
 
     private final IdGenerator idGenerator;
 
+    private final Executor executor = Executors.newFixedThreadPool(100);
+
     public DBAccessor(JdbcTemplate jdbcTemplate, QueryHelper queryHelper, IdGenerator idGenerator) {
         this.jdbcTemplate = jdbcTemplate;
+        this.transactionManager = new DataSourceTransactionManager(Objects.requireNonNull(jdbcTemplate.getDataSource()));
         this.queryHelper = queryHelper;
         this.idGenerator = idGenerator;
     }
@@ -86,24 +106,40 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
         }
         int[] result = new int[size];
         for (int i = 0; i < size; i++) {
-            result[i] = jdbcTemplate.update(query[i], params == null ? null : (Object[]) params[i]);
+            result[i] = jdbcTemplate.update(query[i], (Object[]) params[i]);
         }
         return result;
     }
 
-    // UPDATE X, SET VALUE = NULL;
-    // SELECT * FROM X WHERE VALUE = null;
-
-    @Override
-    public void query(QueryRequest request, StreamObserver<QueryResponse> responseObserver) {
-        Query query = request.getQuery();
-        QueryResponse response = null;
-
+    public QueryResponse executeQuery(Query query) {
         switch (query.getQueryCase()) {
             case RAW -> {
-                // TODO: Handle Raw
-                responseObserver.onError(new ExecutionControl.NotImplementedException("Raw query is not implemented"));
-                return;
+                final RawQuery rawQuery = query.getRaw();
+                final String sql = queryHelper.getRawQuery(rawQuery);
+                System.out.println("SQL: " + sql);
+                List<Row> rows = jdbcTemplate.query((sql), (rs, rowNum) -> {
+                    Row.Builder rowBuilder = Row.newBuilder();
+                    Value.Builder valueBuilder = Value.newBuilder();
+                    for (int i = 0; i < rs.getMetaData().getColumnCount(); i++) {
+                        String columnName = rs.getMetaData().getColumnName(i + 1);
+                        switch (rs.getMetaData().getColumnType(i + 1)) {
+                            case java.sql.Types.INTEGER -> valueBuilder.setIntValue(rs.getInt(i + 1));
+                            case java.sql.Types.BIGINT -> valueBuilder.setLongValue(rs.getLong(i + 1));
+                            case java.sql.Types.FLOAT -> valueBuilder.setFloatValue(rs.getFloat(i + 1));
+                            case java.sql.Types.DOUBLE -> valueBuilder.setDoubleValue(rs.getDouble(i + 1));
+                            case java.sql.Types.VARCHAR -> valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getString(i + 1), ""));
+                            case java.sql.Types.BOOLEAN -> valueBuilder.setBooleanValue(rs.getBoolean(i + 1));
+                            case java.sql.Types.DATE, java.sql.Types.TIMESTAMP -> valueBuilder.setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
+                            default -> throw new IllegalArgumentException("Unsupported column type: " + rs.getMetaData().getColumnType(i + 1));
+                        }
+                        rowBuilder.putValues(columnName, valueBuilder.build());
+                    }
+                    return rowBuilder.build();
+                });
+
+                return QueryResponse.newBuilder()
+                        .setRawResult(RawQueryResult.newBuilder().addAllRows(rows).build())
+                        .build();
             }
             case SELECT -> {
                 final SelectQuery selectQuery = query.getSelect();
@@ -112,6 +148,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 System.out.println("SQL: " + sql);
 
                 final List<Column> columnList = selectQuery.getColumnList();
+                System.out.println("Column List: " + columnList);
                 final int numColumns = columnList.size();
                 final ColumnType[] columnTypeMap = new ColumnType[numColumns];
                 for (int i = 0; i < numColumns; i++) {
@@ -132,14 +169,14 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                             case COLUMN_TYPE_BOOLEAN -> valueBuilder.setBooleanValue(rs.getBoolean(i + 1));
                             case COLUMN_TYPE_DATE, COLUMN_TYPE_DATETIME -> valueBuilder.setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
                             default ->
-                                    throw new IllegalArgumentException("Unsupported column type: " + columnTypeMap[i]);
+                                    throw new IllegalArgumentException("Unsupported column type: " + i + ": " + columnTypeMap[i]);
                         }
 
                         rowBuilder.putValues(columnList.get(i).getName(), valueBuilder.build());
                     }
                     return rowBuilder.build();
                 });
-                response = QueryResponse.newBuilder()
+                return QueryResponse.newBuilder()
                         .setSelectResult(SelectQueryResult.newBuilder().addAllRows(rows).build())
                         .build();
             }
@@ -166,7 +203,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     insertQueryBuilder.setLastInsertId(id);
                 }
 
-                response = QueryResponse.newBuilder()
+                return QueryResponse.newBuilder()
                         .setInsertResult(insertQueryBuilder.build())
                         .build();
             }
@@ -175,7 +212,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 final String sql = queryHelper.getUpdateQuery(updateQuery);
                 System.out.println("SQL: " + sql);
                 final int updateCount = jdbcTemplate.update(sql);
-                response = QueryResponse.newBuilder()
+                return QueryResponse.newBuilder()
                         .setUpdateResult(UpdateQueryResult.newBuilder().setAffectedRows(updateCount).build())
                         .build();
             }
@@ -183,14 +220,60 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 final DeleteQuery deleteQuery = query.getDelete();
                 final String sql = queryHelper.getDeleteQuery(deleteQuery);
                 final int deleteCount = jdbcTemplate.update(sql);
-                response = QueryResponse.newBuilder()
+                return QueryResponse.newBuilder()
                         .setDeleteResult(DeleteQueryResult.newBuilder().setAffectedRows(deleteCount).build())
                         .build();
             }
         }
 
+        return null;
+    }
+
+    @Override
+    public void query(QueryRequest request, StreamObserver<QueryResponse> responseObserver) {
+        QueryResponse response = executeQuery(request.getQuery());
+
+        if (response == null) {
+            responseObserver.onError(new ExecutionControl.NotImplementedException("Raw query is not implemented"));
+            return;
+        }
         responseObserver.onNext(response);
         responseObserver.onCompleted();
+    }
+
+
+    @Override
+    public StreamObserver<QueryRequest> streamQuery(StreamObserver<QueryResponse> responseObserver) {
+        transactionStatus.set(transactionManager.getTransaction(new DefaultTransactionDefinition(TransactionDefinition.PROPAGATION_REQUIRED)));
+        return new StreamObserver<>() {
+            @Override
+            public void onNext(QueryRequest request) {
+                executor.execute(() -> {
+                    QueryResponse response = executeQuery(request.getQuery());
+                    if (response == null) {
+                        responseObserver.onError(new ExecutionControl.NotImplementedException("Raw query is not implemented"));
+                    }
+                    else responseObserver.onNext(response);
+                });
+            }
+
+            @Override
+            public void onError(Throwable throwable) {
+                transactionManager.rollback(transactionStatus.get());
+                transactionStatus.remove();
+
+                responseObserver.onError(throwable);
+            }
+
+            @Override
+            public void onCompleted() {
+                // commit the transaction and ensure that the transaction status is removed from the thread local variable
+                transactionManager.commit(transactionStatus.get());
+                transactionStatus.remove();
+
+                responseObserver.onCompleted();
+            }
+        };
     }
 
 }

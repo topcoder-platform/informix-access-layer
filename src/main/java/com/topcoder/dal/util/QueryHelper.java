@@ -110,6 +110,35 @@ public class QueryHelper {
                 + " WHERE " + String.join(" AND ", whereClause);
     }
 
+    public String getRawQuery(RawQuery query) {
+        return sanitizeSQLStatement(query.getQuery());
+    }
+
+    public static String sanitizeSQLStatement(String sql) {
+        if (sql == null || sql.trim().length() == 0) {
+            throw new IllegalArgumentException("SQL statement is null or empty");
+        }
+
+        // Limit the length of the SQL statement to prevent very long strings
+        if (sql.length() > 1000) {
+            throw new IllegalArgumentException("SQL statement length exceeds the allowed limit");
+        }
+
+        // Whitelist characters
+        StringBuilder safeSQL = new StringBuilder();
+        for (char c : sql.toCharArray()) {
+            if (Character.isLetterOrDigit(c) || c == ' ' || c == ',' || c == '(' || c == ')' || c == '=' || c == '<' || c == '>' || c == '_' || c == ':') {
+                safeSQL.append(c);
+            }
+        }
+        sql = safeSQL.toString();
+
+        // replace single quotes with two single quotes to prevent SQL injection through strings
+        sql = sql.replace("'", "''");
+
+        return sql;
+    }
+
     private static final Function<Join, String> toJoin = (join) -> {
         final String joinType = join.getType().toString();
         final String fromTable = join.hasFromTableSchema() ? join.getFromTableSchema() + ":" + join.getFromTable() : join.getFromTable();
