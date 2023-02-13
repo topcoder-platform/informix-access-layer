@@ -114,7 +114,32 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
     public QueryResponse executeQuery(Query query) {
         switch (query.getQueryCase()) {
             case RAW -> {
-                return null;
+                final RawQuery rawQuery = query.getRaw();
+                final String sql = queryHelper.getRawQuery(rawQuery);
+                System.out.println("SQL: " + sql);
+                List<Row> rows = jdbcTemplate.query((sql), (rs, rowNum) -> {
+                    Row.Builder rowBuilder = Row.newBuilder();
+                    Value.Builder valueBuilder = Value.newBuilder();
+                    for (int i = 0; i < rs.getMetaData().getColumnCount(); i++) {
+                        String columnName = rs.getMetaData().getColumnName(i + 1);
+                        switch (rs.getMetaData().getColumnType(i + 1)) {
+                            case java.sql.Types.INTEGER -> valueBuilder.setIntValue(rs.getInt(i + 1));
+                            case java.sql.Types.BIGINT -> valueBuilder.setLongValue(rs.getLong(i + 1));
+                            case java.sql.Types.FLOAT -> valueBuilder.setFloatValue(rs.getFloat(i + 1));
+                            case java.sql.Types.DOUBLE -> valueBuilder.setDoubleValue(rs.getDouble(i + 1));
+                            case java.sql.Types.VARCHAR -> valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getString(i + 1), ""));
+                            case java.sql.Types.BOOLEAN -> valueBuilder.setBooleanValue(rs.getBoolean(i + 1));
+                            case java.sql.Types.DATE, java.sql.Types.TIMESTAMP -> valueBuilder.setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
+                            default -> throw new IllegalArgumentException("Unsupported column type: " + rs.getMetaData().getColumnType(i + 1));
+                        }
+                        rowBuilder.putValues(columnName, valueBuilder.build());
+                    }
+                    return rowBuilder.build();
+                });
+
+                return QueryResponse.newBuilder()
+                        .setRawResult(RawQueryResult.newBuilder().addAllRows(rows).build())
+                        .build();
             }
             case SELECT -> {
                 final SelectQuery selectQuery = query.getSelect();
