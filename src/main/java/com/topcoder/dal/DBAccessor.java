@@ -14,6 +14,8 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.DefaultTransactionDefinition;
+
+import java.sql.Types;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -117,6 +119,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     for (int i = 0; i < rs.getMetaData().getColumnCount(); i++) {
                         String columnName = rs.getMetaData().getColumnName(i + 1);
                         switch (rs.getMetaData().getColumnType(i + 1)) {
+                            case java.sql.Types.DECIMAL -> valueBuilder.setStringValue(rs.getBigDecimal(i + 1).toString());
                             case java.sql.Types.INTEGER -> valueBuilder.setIntValue(rs.getInt(i + 1));
                             case java.sql.Types.BIGINT -> valueBuilder.setLongValue(rs.getLong(i + 1));
                             case java.sql.Types.FLOAT -> valueBuilder.setFloatValue(rs.getFloat(i + 1));

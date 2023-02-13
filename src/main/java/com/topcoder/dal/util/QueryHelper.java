@@ -179,8 +179,8 @@ public class QueryHelper {
             case DOUBLE_VALUE -> String.valueOf(value.getDoubleValue());
             case FLOAT_VALUE -> String.valueOf(value.getFloatValue());
             case BOOLEAN_VALUE -> String.valueOf(value.getBooleanValue());
-            case DATE_VALUE -> value.getDateValue();
-            case DATETIME_VALUE -> value.getDatetimeValue();
+            case DATE_VALUE -> value.getDateValue().contains("CURRENT") ? value.getDateValue() : "'" + value.getDateValue() + "'";
+            case DATETIME_VALUE -> value.getDatetimeValue().contains("CURRENT") ? value.getDatetimeValue() : "'" + value.getDatetimeValue() + "'";
             case BLOB_VALUE, VALUE_NOT_SET -> null;
         };
     }
