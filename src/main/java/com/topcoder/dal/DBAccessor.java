@@ -3,23 +3,17 @@ package com.topcoder.dal;
 import com.topcoder.dal.rdb.*;
 import com.topcoder.dal.util.IdGenerator;
 import com.topcoder.dal.util.QueryHelper;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import jdk.jshell.spi.ExecutionControl;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.DefaultTransactionDefinition;
-import org.springframework.transaction.support.TransactionCallback;
-import org.springframework.transaction.support.TransactionTemplate;
-
-import javax.transaction.Transaction;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -45,8 +39,6 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
     private final QueryHelper queryHelper;
 
     private final IdGenerator idGenerator;
-
-    private final Executor executor = Executors.newFixedThreadPool(100);
 
     public DBAccessor(JdbcTemplate jdbcTemplate, QueryHelper queryHelper, IdGenerator idGenerator) {
         this.jdbcTemplate = jdbcTemplate;
@@ -112,6 +104,8 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
     }
 
     public QueryResponse executeQuery(Query query) {
+        // log current thread
+        System.out.println("Thread: " + Thread.currentThread().getName());
         switch (query.getQueryCase()) {
             case RAW -> {
                 final RawQuery rawQuery = query.getRaw();
@@ -245,16 +239,15 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
     @Override
     public StreamObserver<QueryRequest> streamQuery(StreamObserver<QueryResponse> responseObserver) {
         transactionStatus.set(transactionManager.getTransaction(new DefaultTransactionDefinition(TransactionDefinition.PROPAGATION_REQUIRED)));
+
         return new StreamObserver<>() {
             @Override
             public void onNext(QueryRequest request) {
-                executor.execute(() -> {
-                    QueryResponse response = executeQuery(request.getQuery());
-                    if (response == null) {
-                        responseObserver.onError(new ExecutionControl.NotImplementedException("Raw query is not implemented"));
-                    }
-                    else responseObserver.onNext(response);
-                });
+                QueryResponse response = executeQuery(request.getQuery());
+                if (response == null) {
+                    responseObserver.onError(new ExecutionControl.NotImplementedException("Raw query is not implemented"));
+                }
+                else responseObserver.onNext(response);
             }
 
             @Override
@@ -267,7 +260,6 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
             @Override
             public void onCompleted() {
-                // commit the transaction and ensure that the transaction status is removed from the thread local variable
                 transactionManager.commit(transactionStatus.get());
                 transactionStatus.remove();
 
@@ -277,3 +269,4 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
     }
 
 }
+// 30092710
