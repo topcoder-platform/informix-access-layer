@@ -1,6 +1,6 @@
 # Informix Access Layer
 
-This is a simple gRPC service that implements the [Relational](https://github.com/topcoder-platform/plat-interface-definition/tree/main/data-access-layer/relational) to access the data in Informix.
+This is a simple gRPC service that implements the [Relational](https://github.com/topcoder-platform/plat-interface-definition/tree/main/data-access-layer/relational) interface to talk to Informix.
 
 # Roadmap
 

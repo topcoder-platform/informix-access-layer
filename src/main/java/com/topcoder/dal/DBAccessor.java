@@ -143,7 +143,6 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             }
             case SELECT -> {
                 final SelectQuery selectQuery = query.getSelect();
-                System.out.println("Table Name: " + selectQuery.getTable());
                 final String sql = queryHelper.getSelectQuery(selectQuery);
 
                 System.out.println("SQL: " + sql);
@@ -168,8 +167,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                             case COLUMN_TYPE_STRING ->
                                     valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getString(i + 1), ""));
                             case COLUMN_TYPE_BOOLEAN -> valueBuilder.setBooleanValue(rs.getBoolean(i + 1));
-                            case COLUMN_TYPE_DATE, COLUMN_TYPE_DATETIME ->
-                                    valueBuilder.setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
+                            case COLUMN_TYPE_DATE, COLUMN_TYPE_DATETIME -> valueBuilder.setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
                             default ->
                                     throw new IllegalArgumentException("Unsupported column type: " + i + ": " + columnTypeMap[i]);
                         }
@@ -197,7 +195,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     sql = queryHelper.getInsertQuery(insertQuery);
                 }
 
-                System.out.println("Insert SQL: " + sql);
+                System.out.println("SQL: " + sql);
                 jdbcTemplate.update(sql);
 
                 InsertQueryResult.Builder insertQueryBuilder = InsertQueryResult.newBuilder();
