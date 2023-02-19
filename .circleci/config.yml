@@ -57,7 +57,7 @@ jobs:
     steps:
       - checkout
       - attach_workspace:
-            at: .
+          at: .
       - setup_remote_docker:
           docker_layer_caching: true
       - run:
@@ -74,12 +74,26 @@ jobs:
           root: .
           paths:
             - ${SERVICE_NAME}:${CIRCLE_SHA1}
+
   release:
+    docker:
+      - image: docker:20.10.7
     steps:
-        - checkout
-        - run:
-            name: Semantic Release
-            command: npx semantic-release
+      - run:
+          name: Get commit hash for the release tag
+          command: |
+            git fetch --tags
+            export COMMIT_HASH=$(git rev-list -n 1 $CIRCLE_TAG)
+      - run:
+          name: Download image from ECR
+          command: |
+            eval $(aws ecr get-login --region $AWS_REGION --no-include-email)
+            docker pull ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${COMMIT_HASH}
+      - run:
+          name: Publish to ECR
+          command: |
+            docker tag ${SERVICE_NAME}:${CIRCLE_SHA1} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_TAG}
+            docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_TAG}
 
 workflows:
   version: 2
@@ -105,10 +119,10 @@ workflows:
       - release:
           context: "org-global"
           filters:
-            branches:
-              only: "main"
+            tags:
+              only: /^v\d+\.\d+(\.\d+)?(-\S*)?$/
           requires:
-            - build
+            - set_aws_env_variables
 
 #  release:
 #    steps:
