@@ -54,7 +54,7 @@ jobs:
       - run:
           name: "Publish docker image"
           command: |
-            echo "Running in region $AWS_REGION ${AWS_REGION"
+            echo "Running in region $AWS_REGION ${AWS_REGION}"
             ls -la
             eval $(aws ecr get-login --region $AWS_REGION --no-include-email)
             docker tag ${SERVICE_NAME}:${CIRCLE_SHA1} $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
