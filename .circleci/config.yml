@@ -49,7 +49,9 @@ jobs:
           command: |
             git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../${OUT_DIR}
             cp ./../${OUT_DIR}/awsconfiguration.sh .
+            ls
             ./awsconfiguration.sh DEV
+            ls
             source awsenvconf
             echo "AWS Account ID ${AWS_ACCOUNT_ID}"
 
