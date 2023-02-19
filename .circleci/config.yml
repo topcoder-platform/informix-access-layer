@@ -58,12 +58,12 @@ workflows:
   build_and_test:
     jobs:
       - set_aws_env_variables:
-          context: "build-and-publish"
+          context: "org-global"
           filters:
             branches:
               only: "ci/integrate-circleci"
       - build:
-          context: "build-and-publish"
+          context: "org-global"
           requires:
             - set_aws_env_variables
 
