@@ -37,7 +37,7 @@ jobs:
             cd protobuf
             mvn clean package
       - persist_to_workspace:
-          root: .
+          root: target
           paths:
             - tc-dal-rdb-proto-1.0-SNAPSHOT.jar
   build:
@@ -49,17 +49,6 @@ jobs:
       - checkout
       - attach_workspace:
             at: .
-      - run:
-          name: "Install interface definitions"
-          command: |
-            mvn install:install-file \
-                -Dfile=tc-dal-rdb-proto-1.0-SNAPSHOT.jar \
-                -DgroupId=com.topcoder \
-                -DartifactId=tc-dal-rdb-proto \
-                -Dversion=1.0-SNAPSHOT \
-                -Dpackaging=jar \
-                -DgeneratePom=true \
-                -DcreateChecksum=true
       - run:
           name: "Build docker image"
           command: |
