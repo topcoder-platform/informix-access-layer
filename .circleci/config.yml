@@ -60,7 +60,6 @@ jobs:
           name: "Publish docker image"
           command: |
             eval $(aws ecr get-login --region $AWS_REGION --no-include-email)
-            docker load -i ${SERVICE_NAME}.tar
             docker tag ${SERVICE_NAME}:${CIRCLE_SHA1} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
             docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
 
