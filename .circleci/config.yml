@@ -60,7 +60,7 @@ jobs:
 
 workflows:
   version: 2
-  build_and_test:
+  publish:
     jobs:
       - build_interface_definitions:
           context: "org-global"
