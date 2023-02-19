@@ -30,6 +30,9 @@ jobs:
       PROTOBUF_VERSION: v0.0.1
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - protobuf-{{ checksum "pom.xml" }}
       - run:
           name: Download and build interface definitions
           command: |
@@ -40,6 +43,10 @@ jobs:
           root: protobuf/target
           paths:
             - tc-dal-rdb-proto-1.0-SNAPSHOT.jar
+      - save_cache:
+          key: protobuf-{{ checksum "pom.xml" }}
+          paths:
+            - protobuf
   build:
     docker:
       - image: docker:20.10.7
