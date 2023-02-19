@@ -2,15 +2,16 @@ version: 2.1
 
 jobs:
   set_aws_env_variables:
+    environment:
+      OUT_DIR: buildscripts
     docker:
       - image: alpine/git
     steps:
       - run:
           name: "Set AWS environment variables"
           command: |
-            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts buildscripts
-            ls
-            cd ./buildscript
+            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ${OUT_DIR}
+            cd ./${OUT_DIR}
             ./awsconfiguration.sh dev
 
   build:
