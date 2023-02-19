@@ -36,22 +36,10 @@ jobs:
             git clone --branch ${PROTOBUF_VERSION} --depth 1 ${PROTOBUF_REPO} protobuf
             cd protobuf
             mvn clean package
-            mvn install:install-file \
-                -Dfile=target/tc-dal-rdb-proto-1.0-SNAPSHOT.jar \
-                -DgroupId=com.topcoder \
-                -DartifactId=tc-dal-rdb-proto \
-                -Dversion=1.0-SNAPSHOT \
-                -Dpackaging=jar \
-                -DgeneratePom=true \
-                -DcreateChecksum=true
-            cp target/tc-dal-rdb-proto-1.0-SNAPSHOT.jar ./src/main/resources
-            rm -rf target
-            cd ../
-            rm -rf protobuf
       - persist_to_workspace:
           root: .
           paths:
-            - .m2
+            - tc-dal-rdb-proto-1.0-SNAPSHOT.jar
   build:
     docker:
       - image: docker:20.10.7
@@ -61,8 +49,17 @@ jobs:
       - checkout
       - attach_workspace:
             at: .
-#      - setup_remote_docker:
-#          docker_layer_caching: true
+      - run:
+          name: "Install interface definitions"
+          command: |
+            mvn install:install-file \
+                -Dfile=tc-dal-rdb-proto-1.0-SNAPSHOT.jar \
+                -DgroupId=com.topcoder \
+                -DartifactId=tc-dal-rdb-proto \
+                -Dversion=1.0-SNAPSHOT \
+                -Dpackaging=jar \
+                -DgeneratePom=true \
+                -DcreateChecksum=true
       - run:
           name: "Build docker image"
           command: |
