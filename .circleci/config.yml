@@ -1,6 +1,8 @@
 version: 2.1
 jobs:
   set-aws-env-variables:
+    docker:
+      - image: alpine/git
     steps:
       -run:
         name: "Set AWS environment variables"
@@ -9,11 +11,11 @@ jobs:
           cd ../buildscript
           ./awsconfiguration.sh dev
   build:
+    docker:
+      - image: maven:3.8.6-openjdk-18
     environment:
       PROTOBUF_REPO: https://github.com/topcoder-platform/rdb-interface-project.git
       PROTOBUF_VERSION: v1.0.0
-    docker:
-      -image: maven:3.8.6-openjdk-18
     requires:
       - set-aws-env-variables
     steps:
@@ -40,36 +42,37 @@ jobs:
           name: Build Docker Image
           command: |
             docker build ${SERVICE_NAME} .
-  release:
-    steps:
-      - checkout
-      - run:
-          name: Semantic Release
-          command: npx semantic-release
-  tag:
-    orb:
-      name: circleci/node
-    executor:
-        name: node/default
-        tag: lts
-    requires:
-      - build
-    steps:
-      - name: "Tag docker image"
-        command: |
-          docker tag ${SERVICE_NAME} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
+#  release:
+#    steps:
+#      - checkout
+#      - run:
+#          name: Semantic Release
+#          command: npx semantic-release
+#  tag:
+#    orb:
+#      name: circleci/node
+#    executor:
+#        name: node/default
+#        tag: lts
+#    requires:
+#      - build
+#    steps:
+#      - name: "Tag docker image"
+#        command: |
+#          docker tag ${SERVICE_NAME} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
 
+version: 2.1
 workflows:
   version: 2
-  build-and-publish:
-    filters:
-      branches:
-        only: ci/integrate-circleci
+  build-and-test:
     jobs:
       - set-aws-env-variables
-      - build
-      - release
-      - tag
+      - build:
+          filters:
+            branches:
+              only: main
+            pull_requests:
+              only: true
 
 
 
