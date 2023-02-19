@@ -1,27 +1,6 @@
 version: 2.1
 
 jobs:
-  set_aws_env_variables:
-    environment:
-      OUT_DIR: buildscripts
-      ECR_PUBLISH_ENV: dev
-    docker:
-      - image: amazon/aws-cli
-    steps:
-      - run:
-            name: Install jq and git
-            command: |
-              yum install -y jq
-              yum install -y git
-      - run:
-          name: "Set AWS environment variables"
-          command: |
-            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ${OUT_DIR}
-            cd ./${OUT_DIR}
-            ls -la
-            sh ./awsconfiguration.sh $ECR_PUBLISH_ENV
-            source awsenvconf
-
   build_interface_definitions:
     docker:
       - image: maven:3.8.6-openjdk-18
@@ -64,82 +43,55 @@ jobs:
           name: "Build docker image"
           command: |
             docker build -t ${SERVICE_NAME}:${CIRCLE_SHA1} .
+            docker save ${SERVICE_NAME}:${CIRCLE_SHA1} > ${SERVICE_NAME}.tar
+      - persist_to_workspace:
+          root: .
+          paths:
+            - ${SERVICE_NAME}.tar
+  publish:
+    environment:
+      OUT_DIR: buildscripts
+      ECR_PUBLISH_ENV: dev
+    docker:
+      - image: amazon/aws-cli
+    steps:
+      - run:
+          name: Install jq and git
+          command: |
+            yum install -y jq
+            yum install -y git
+            yum install -y docker
+      - run:
+          name: "Set AWS environment variables"
+          command: |
+            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ${OUT_DIR}
+            cd ./${OUT_DIR}
+            ls -la
+            sh ./awsconfiguration.sh $ECR_PUBLISH_ENV
+            source awsenvconf
+      - attach_workspace:
+          at: .
       - run:
           name: "Publish docker image"
           command: |
             eval $(aws ecr get-login --region $AWS_REGION --no-include-email)
+            docker load < ${SERVICE_NAME}.tar
             docker tag ${SERVICE_NAME}:${CIRCLE_SHA1} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
             docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
-      - persist_to_workspace:
-          root: .
-          paths:
-            - ${SERVICE_NAME}:${CIRCLE_SHA1}
-
-  release:
-    docker:
-      - image: docker:20.10.7
-    steps:
-      - run:
-          name: Get commit hash for the release tag
-          command: |
-            git fetch --tags
-            export COMMIT_HASH=$(git rev-list -n 1 $CIRCLE_TAG)
-      - run:
-          name: Download image from ECR
-          command: |
-            eval $(aws ecr get-login --region $AWS_REGION --no-include-email)
-            docker pull ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${COMMIT_HASH}
-      - run:
-          name: Publish to ECR
-          command: |
-            docker tag ${SERVICE_NAME}:${CIRCLE_SHA1} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_TAG}
-            docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_TAG}
-
 workflows:
   version: 2
   build_and_test:
     jobs:
-      - set_aws_env_variables:
+      - build_interface_definitions:
           context: "org-global"
           filters:
             branches:
               only: "ci/integrate-circleci"
-      - build_interface_definitions:
-            context: "org-global"
-            requires:
-                - set_aws_env_variables
       - build:
           context: "org-global"
           requires:
             - build_interface_definitions
-      - release:
+      - publish:
           context: "org-global"
-          filters:
-            tags:
-              only: /^v\d+\.\d+(\.\d+)?(-\S*)?$/
           requires:
-            - set_aws_env_variables
-
-#  release:
-#    steps:
-#      - checkout
-#      - run:
-#          name: Semantic Release
-#          command: npx semantic-release
-#  tag:
-#    orb:
-#      name: circleci/node
-#    executor:
-#        name: node/default
-#        tag: lts
-#    requires:
-#      - build
-#    steps:
-#      - name: "Tag docker image"
-#        command: |
-#          docker tag ${SERVICE_NAME} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
-
-
-
-
-
+            - build
