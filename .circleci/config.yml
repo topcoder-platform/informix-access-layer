@@ -8,7 +8,7 @@ jobs:
     docker:
       - image: amazon/aws-cli
     steps:
-      - - run:
+      - run:
             name: Install jq and git
             command: |
               yum install -y jq
