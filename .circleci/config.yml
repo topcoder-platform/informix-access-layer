@@ -32,7 +32,7 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Download and build relational interface definitions
+          name: Download and build interface definitions
           command: |
             git clone --branch ${PROTOBUF_VERSION} --depth 1 ${PROTOBUF_REPO} protobuf
             cd protobuf
@@ -49,6 +49,7 @@ jobs:
             rm -rf target
             cd ../
             rm -rf protobuf
+      - setup_remote_docker
       - run:
           name: Build Docker Image
           command: |
