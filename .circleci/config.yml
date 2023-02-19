@@ -66,7 +66,7 @@ workflows:
           context: "org-global"
           filters:
             branches:
-              only: "ci/integrate-circleci"
+              only: "main"
       - build_and_publish_to_ecr:
           context: "org-global"
           requires:
