@@ -54,8 +54,9 @@ jobs:
       - run:
           name: "Set AWS environment variables"
           command: |
-            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ${OUT_DIR}
-            cd ./${OUT_DIR}
+            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../${OUT_DIR}
+            cp ./../${OUT_DIR}/awsconfiguration.sh .
+            ls -la
             ./awsconfiguration.sh $ECR_REPO_ACCOUNT
             source awsenvconf
       - run:
