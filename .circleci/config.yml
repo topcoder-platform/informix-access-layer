@@ -1,0 +1,76 @@
+version: 2.1
+jobs:
+  set-aws-env-variables:
+    steps:
+      -run:
+        name: "Set AWS environment variables"
+        command: |
+          git clone --branch v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../buildscript
+          cd ../buildscript
+          ./awsconfiguration.sh dev
+  build:
+    environment:
+      PROTOBUF_REPO: https://github.com/topcoder-platform/rdb-interface-project.git
+      PROTOBUF_VERSION: v1.0.0
+    docker:
+      -image: maven:3.8.6-openjdk-18
+    requires:
+      - set-aws-env-variables
+    steps:
+      - checkout
+      - run:
+          name: Download and build relational interface definitions
+          command: |
+            git clone --branch ${PROTOBUF_VERSION} --depth 1 ${PROTOBUF_REPO} protobuf
+            cd protobuf
+            mvn clean package
+            mvn install:install-file \
+                -Dfile=target/protobuf-${PROTOBUF_VERSION}.jar \
+                -DgroupId=com.topcoder \
+                -DartifactId=tc-dal-rdb-proto \
+                -Dversion=1.0-SNAPSHOT \
+                -Dpackaging=jar \
+                -DgeneratePom=true \
+                -DcreateChecksum=true
+            cp target/protobuf-${PROTOBUF_VERSION}.jar ./src/main/resources
+            rm -rf target
+            cd ../
+            rm -rf protobuf
+      - run:
+          name: Build Docker Image
+          command: |
+            docker build ${SERVICE_NAME} .
+  release:
+    steps:
+      - checkout
+      - run:
+          name: Semantic Release
+          command: npx semantic-release
+  tag:
+    orb:
+      name: circleci/node
+    executor:
+        name: node/default
+        tag: lts
+    requires:
+      - build
+    steps:
+      - name: "Tag docker image"
+        command: |
+          docker tag ${SERVICE_NAME} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
+
+workflows:
+  version: 2
+  build-and-publish:
+    filters:
+      branches:
+        only: ci/integrate-circleci
+    jobs:
+      - set-aws-env-variables
+      - build
+      - release
+      - tag
+
+
+
+
