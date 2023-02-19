@@ -26,6 +26,7 @@ jobs:
     docker:
       - image: maven:3.8.6-openjdk-18
     environment:
+      SERVICE_NAME: anticorruption-layer
       PROTOBUF_REPO: https://github.com/topcoder-platform/rdb-interface-project.git
       PROTOBUF_VERSION: v0.0.1
     steps:
@@ -37,14 +38,14 @@ jobs:
             cd protobuf
             mvn clean package
             mvn install:install-file \
-                -Dfile=target/protobuf-${PROTOBUF_VERSION}.jar \
+                -Dfile=target/tc-dal-rdb-proto-1.0-SNAPSHOT.jar \
                 -DgroupId=com.topcoder \
                 -DartifactId=tc-dal-rdb-proto \
                 -Dversion=1.0-SNAPSHOT \
                 -Dpackaging=jar \
                 -DgeneratePom=true \
                 -DcreateChecksum=true
-            cp target/protobuf-${PROTOBUF_VERSION}.jar ./src/main/resources
+            cp target/tc-dal-rdb-proto-1.0-SNAPSHOT.jar ./src/main/resources
             rm -rf target
             cd ../
             rm -rf protobuf
