@@ -4,6 +4,7 @@ jobs:
   set_aws_env_variables:
     environment:
       OUT_DIR: buildscripts
+      ECR_PUBLISH_ENV: dev
     docker:
       - image: alpine/git
     steps:
@@ -12,7 +13,9 @@ jobs:
           command: |
             git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ${OUT_DIR}
             cd ./${OUT_DIR}
-            ./awsconfiguration.sh dev
+            ls -la
+            ./awsconfiguration.sh $ECR_PUBLISH_ENV
+            source awsenvconf
 
   build:
     docker:
