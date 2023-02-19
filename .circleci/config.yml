@@ -33,6 +33,7 @@ jobs:
       - image: docker:latest
     environment:
       SERVICE_NAME: "informix-access-layer"
+      OUT_DIR: "buildscripts"
     steps:
       - checkout
       - attach_workspace:
