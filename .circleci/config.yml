@@ -36,7 +36,7 @@ jobs:
       - run:
           name: Download and build interface definitions
           command: |
-            if [ -z "${CIRCLE_RESTORE_CACHE}" ]; then
+            if [ ! -d "protobuf" ] || [ -z "$(ls -A protobuf)" ]; then
               git clone --branch ${PROTOBUF_VERSION} --depth 1 ${PROTOBUF_REPO} protobuf
               cd protobuf
               mvn clean package
