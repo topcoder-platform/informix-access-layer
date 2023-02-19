@@ -27,7 +27,7 @@ jobs:
       - image: maven:3.8.6-openjdk-18
     environment:
       PROTOBUF_REPO: https://github.com/topcoder-platform/rdb-interface-project.git
-      PROTOBUF_VERSION: v1.0.0
+      PROTOBUF_VERSION: v0.0.1
     steps:
       - checkout
       - run:
