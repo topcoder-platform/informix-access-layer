@@ -7,6 +7,6 @@ RUN mvn -f /home/tc-informix-dal/pom.xml clean
 RUN mvn -f /home/tc-informix-dal/pom.xml package
 
 
-FROM gcr.io/distroless/java:17
+FROM gcr.io/distroless/java17
 COPY --from=builder /home/tc-informix-dal/target/*.jar /app/informix-access-layer.jar
 ENTRYPOINT ["java", "-jar", "/app/informix-access-layer.jar"]
