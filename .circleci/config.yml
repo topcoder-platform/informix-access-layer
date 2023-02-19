@@ -43,7 +43,7 @@ jobs:
           name: "Build docker image"
           command: |
             docker build -t ${SERVICE_NAME}:${CIRCLE_SHA1} .
-            docker save ${SERVICE_NAME}:${CIRCLE_SHA1} > ${SERVICE_NAME}.tar
+            docker save -o ${SERVICE_NAME}:${CIRCLE_SHA1} ${SERVICE_NAME}.tar
       - persist_to_workspace:
           root: .
           paths:
@@ -75,7 +75,7 @@ jobs:
           name: "Publish docker image"
           command: |
             eval $(aws ecr get-login --region $AWS_REGION --no-include-email)
-            docker load < ${SERVICE_NAME}.tar
+            docker load -i ${SERVICE_NAME}.tar
             docker tag ${SERVICE_NAME}:${CIRCLE_SHA1} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
             docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
 workflows:
