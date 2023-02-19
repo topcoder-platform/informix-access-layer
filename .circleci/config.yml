@@ -14,7 +14,7 @@ jobs:
             git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ${OUT_DIR}
             cd ./${OUT_DIR}
             ls -la
-            ./awsconfiguration.sh $ECR_PUBLISH_ENV
+            sh ./awsconfiguration.sh $ECR_PUBLISH_ENV
             source awsenvconf
 
   build:
