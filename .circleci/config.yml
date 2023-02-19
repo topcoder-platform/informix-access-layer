@@ -61,7 +61,6 @@ jobs:
 #        command: |
 #          docker tag ${SERVICE_NAME} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
 
-version: 2.1
 workflows:
   version: 2
   build-and-test:
