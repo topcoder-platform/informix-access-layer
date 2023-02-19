@@ -74,12 +74,13 @@ jobs:
           root: .
           paths:
             - ${SERVICE_NAME}:${CIRCLE_SHA1}
-    release:
-        steps:
-            - checkout
-            - run:
-                name: Semantic Release
-                command: npx semantic-release
+  release:
+    steps:
+        - checkout
+        - run:
+            name: Semantic Release
+            command: npx semantic-release
+
 workflows:
   version: 2
   build_and_test:
