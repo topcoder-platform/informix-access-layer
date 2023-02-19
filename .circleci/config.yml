@@ -112,10 +112,6 @@ workflows:
           context: "org-global"
           requires:
             - build_interface_definitions
-      - publish:
-          context: "org-global"
-          requires:
-            - build
       - release:
           context: "org-global"
           filters:
