@@ -34,7 +34,6 @@ jobs:
     environment:
       SERVICE_NAME: "informix-access-layer"
       OUT_DIR: "buildscripts"
-      $ECR_REPO_ACCOUNT: DEV
     steps:
       - checkout
       - attach_workspace:
@@ -50,7 +49,7 @@ jobs:
           command: |
             git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../${OUT_DIR}
             cp ./../${OUT_DIR}/awsconfiguration.sh .
-            sh awsconfiguration.sh $ECR_REPO_ACCOUNT
+            ./awsconfiguration.sh DEV
             source awsenvconf
       - run:
           name: "Publish docker image"
