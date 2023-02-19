@@ -127,7 +127,7 @@ public class QueryHelper {
         // Whitelist characters
         StringBuilder safeSQL = new StringBuilder();
         for (char c : sql.toCharArray()) {
-            if (Character.isLetterOrDigit(c) || c == ' ' || c == ',' || c == '(' || c == ')' || c == '=' || c == '<' || c == '>' || c == '_' || c == ':') {
+            if (Character.isLetterOrDigit(c) || c == ' ' || c == ',' || c == '(' || c == ')' || c == '=' || c == '<' || c == '>' || c == '_' || c == ':' || c == '.') {
                 safeSQL.append(c);
             }
         }

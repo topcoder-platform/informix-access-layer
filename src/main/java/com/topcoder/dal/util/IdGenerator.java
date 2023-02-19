@@ -19,19 +19,12 @@ public class IdGenerator {
         long nextId = 0;
 
         if (!sequenceNames.containsKey(sequenceName)) {
-            System.out.println("sequenceNames does not contain " + sequenceName);
             sequenceNames.put(sequenceName, new long[]{availableId, nextId});
-        } else {
-            System.out.println("sequenceNames contains " + sequenceName);
         }
 
         final long[] ids = sequenceNames.get(sequenceName);
         availableId = ids[0];
         nextId = ids[1];
-
-        System.out.println("availableId: " + availableId);
-        System.out.println("nextId: " + nextId);
-
         availableId--;
 
         if (availableId <= 0) {

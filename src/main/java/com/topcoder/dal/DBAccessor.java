@@ -107,7 +107,6 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
     public QueryResponse executeQuery(Query query) {
         // log current thread
-        System.out.println("Thread: " + Thread.currentThread().getName());
         switch (query.getQueryCase()) {
             case RAW -> {
                 final RawQuery rawQuery = query.getRaw();
@@ -145,7 +144,6 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 System.out.println("SQL: " + sql);
 
                 final List<Column> columnList = selectQuery.getColumnList();
-                System.out.println("Column List: " + columnList);
                 final int numColumns = columnList.size();
                 final ColumnType[] columnTypeMap = new ColumnType[numColumns];
                 for (int i = 0; i < numColumns; i++) {
