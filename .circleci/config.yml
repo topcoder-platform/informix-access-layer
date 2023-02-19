@@ -51,6 +51,8 @@ jobs:
             cp ./../${OUT_DIR}/awsconfiguration.sh .
             ./awsconfiguration.sh DEV
             source awsenvconf
+            echo "AWS Account ID ${AWS_ACCOUNT_ID}"
+
       - run:
           name: "Publish docker image"
           command: |
