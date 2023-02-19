@@ -51,13 +51,14 @@ jobs:
             apk add jq
             apk add git
             apk add aws-cli
+            apk add curl
       - run:
           name: "Set AWS environment variables"
           command: |
             git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../${OUT_DIR}
             cp ./../${OUT_DIR}/awsconfiguration.sh .
             ls -la
-            ./awsconfiguration.sh $ECR_REPO_ACCOUNT
+            sh awsconfiguration.sh $ECR_REPO_ACCOUNT
             source awsenvconf
       - run:
           name: "Publish docker image"
