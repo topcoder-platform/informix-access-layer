@@ -48,14 +48,12 @@ workflows:
   build_and_test:
     jobs:
       - set_aws_env_variables:
-          context: build-and-publish
+          context: "build-and-publish"
           filters:
             branches:
-              only: main
-            pull_requests:
-              only: true
+              only: "ci/integrate-circleci"
       - build:
-          context: build-and-publish
+          context: "build-and-publish"
           requires:
             - set_aws_env_variables
 
