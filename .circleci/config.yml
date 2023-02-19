@@ -37,7 +37,7 @@ jobs:
             cd protobuf
             mvn clean package
       - persist_to_workspace:
-          root: target
+          root: protobuf/target
           paths:
             - tc-dal-rdb-proto-1.0-SNAPSHOT.jar
   build:
