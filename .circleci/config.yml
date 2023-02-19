@@ -49,18 +49,14 @@ jobs:
           command: |
             git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../${OUT_DIR}
             cp ./../${OUT_DIR}/awsconfiguration.sh .
-            ls
             ./awsconfiguration.sh DEV
-            ls
             source awsenvconf
-            echo "AWS Account ID ${AWS_ACCOUNT_ID}"
-
       - run:
           name: "Publish docker image"
           command: |
             eval $(aws ecr get-login --region $AWS_REGION --no-include-email)
             docker tag ${SERVICE_NAME}:${CIRCLE_SHA1} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
-            docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
+            docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
 
 workflows:
   version: 2
