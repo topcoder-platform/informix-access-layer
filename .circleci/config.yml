@@ -6,7 +6,7 @@ jobs:
       OUT_DIR: buildscripts
       ECR_PUBLISH_ENV: dev
     docker:
-      - image: alpine/git
+      - image: amazon/aws-cli
     steps:
       - run:
           name: "Set AWS environment variables"
