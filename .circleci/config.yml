@@ -8,8 +8,9 @@ jobs:
       - run:
           name: "Set AWS environment variables"
           command: |
-            git clone --branch v1.4 https://github.com/topcoder-platform/tc-deploy-scripts buildscripts
-            cd buildscript
+            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts buildscripts
+            ls
+            cd ./buildscript
             ./awsconfiguration.sh dev
 
   build:
