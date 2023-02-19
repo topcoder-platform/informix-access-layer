@@ -47,13 +47,17 @@ workflows:
   version: 2
   build_and_test:
     jobs:
-      - set_aws_env_variables
-      - build
-    filters:
-      branches:
-        only: main
-      pull_requests:
-        only: true
+      - set_aws_env_variables:
+          context: build-and-publish
+          filters:
+            branches:
+              only: main
+            pull_requests:
+              only: true
+      - build:
+          context: build-and-publish
+          requires:
+            - set_aws_env_variables
 
 
 #  release:
