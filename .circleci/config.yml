@@ -22,11 +22,10 @@ jobs:
             sh ./awsconfiguration.sh $ECR_PUBLISH_ENV
             source awsenvconf
 
-  build:
+  build_interface_definitions:
     docker:
       - image: maven:3.8.6-openjdk-18
     environment:
-      SERVICE_NAME: anticorruption-layer
       PROTOBUF_REPO: https://github.com/topcoder-platform/rdb-interface-project.git
       PROTOBUF_VERSION: v0.0.1
     steps:
@@ -49,11 +48,27 @@ jobs:
             rm -rf target
             cd ../
             rm -rf protobuf
-      - setup_remote_docker
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .m2
+  build:
+    docker:
+      - image: docker:20.10.7
+    environment:
+      SERVICE_NAME: "informix-access-layer"
+    steps:
+      - checkout
+      - attach_workspace:
+            at: .
+#      - setup_remote_docker:
+#          docker_layer_caching: true
       - run:
-          name: Build Docker Image
+          name: "Build docker image"
           command: |
-            docker build ${SERVICE_NAME} .
+            docker build -t ${SERVICE_NAME} .
+#            docker tag ${SERVICE_NAME} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
+#            docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
 
 workflows:
   version: 2
@@ -64,10 +79,14 @@ workflows:
           filters:
             branches:
               only: "ci/integrate-circleci"
+      - build_interface_definitions:
+            context: "org-global"
+            requires:
+                - set_aws_env_variables
       - build:
           context: "org-global"
           requires:
-            - set_aws_env_variables
+            - build_interface_definitions
 
 
 #  release:
