@@ -1,0 +1,73 @@
+version: 2.1
+
+jobs:
+  build_interface_definitions:
+    docker:
+      - image: maven:3.8.6-openjdk-18
+    environment:
+      PROTOBUF_REPO: https://github.com/topcoder-platform/rdb-interface-project.git
+      PROTOBUF_VERSION: v0.0.1
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - protobuf-{{ checksum "pom.xml" }}
+      - run:
+          name: Download and build interface definitions
+          command: |
+            if [ ! -d "protobuf" ] || [ -z "$(ls -A protobuf)" ]; then
+              git clone --branch ${PROTOBUF_VERSION} --depth 1 ${PROTOBUF_REPO} protobuf
+              cd protobuf
+              mvn clean package
+            fi
+      - persist_to_workspace:
+          root: protobuf/target
+          paths:
+            - tc-dal-rdb-proto-1.0-SNAPSHOT.jar
+      - save_cache:
+          key: protobuf-{{ checksum "pom.xml" }}
+          paths:
+            - protobuf
+  build_and_publish_to_ecr:
+    docker:
+      - image: cimg/aws:2023.01
+    environment:
+      SERVICE_NAME: "informix-access-layer"
+      OUT_DIR: "buildscripts"
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - setup_remote_docker:
+          docker_layer_caching: true
+      - run:
+          name: "Build docker image"
+          command: |
+            docker build -t ${SERVICE_NAME}:${CIRCLE_SHA1} .
+      - run:
+          name: "Set AWS environment variables"
+          command: |
+            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../${OUT_DIR}
+            cp ./../${OUT_DIR}/awsconfiguration.sh .
+            ./awsconfiguration.sh DEV
+      - run:
+          name: "Publish docker image"
+          command: |
+            source awsenvconf
+            aws ecr get-login-password | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+            docker tag ${SERVICE_NAME}:${CIRCLE_SHA1} $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
+            docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
+
+workflows:
+  version: 2
+  publish:
+    jobs:
+      - build_interface_definitions:
+          context: "org-global"
+          filters:
+            branches:
+              only: "main"
+      - build_and_publish_to_ecr:
+          context: "org-global"
+          requires:
+            - build_interface_definitions
