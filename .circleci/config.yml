@@ -36,9 +36,11 @@ jobs:
       - run:
           name: Download and build interface definitions
           command: |
-            git clone --branch ${PROTOBUF_VERSION} --depth 1 ${PROTOBUF_REPO} protobuf
-            cd protobuf
-            mvn clean package
+            if [ -z "${CIRCLE_RESTORE_CACHE}" ]; then
+              git clone --branch ${PROTOBUF_VERSION} --depth 1 ${PROTOBUF_REPO} protobuf
+              cd protobuf
+              mvn clean package
+            fi
       - persist_to_workspace:
           root: protobuf/target
           paths:
