@@ -1,15 +1,17 @@
 version: 2.1
+
 jobs:
   set_aws_env_variables:
     docker:
       - image: alpine/git
     steps:
       - run:
-        name: "Set AWS environment variables"
-        command: |
-          git clone --branch v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../buildscript
-          cd ../buildscript
-          ./awsconfiguration.sh dev
+          name: "Set AWS environment variables"
+          command: |
+            git clone --branch v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../buildscript
+            cd ../buildscript
+            ./awsconfiguration.sh dev
+
   build:
     docker:
       - image: maven:3.8.6-openjdk-18
@@ -40,6 +42,20 @@ jobs:
           name: Build Docker Image
           command: |
             docker build ${SERVICE_NAME} .
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - set_aws_env_variables
+      - build
+    filters:
+      branches:
+        only: main
+      pull_requests:
+        only: true
+
+
 #  release:
 #    steps:
 #      - checkout
@@ -59,17 +75,6 @@ jobs:
 #        command: |
 #          docker tag ${SERVICE_NAME} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${SERVICE_NAME}:${CIRCLE_SHA1}
 
-workflows:
-  version: 2
-  build_and_test:
-    jobs:
-      - set_aws_env_variables
-      - build:
-          filters:
-            branches:
-              only: main
-            pull_requests:
-              only: true
 
 
 
