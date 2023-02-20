@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   build_interface_definitions:
     docker:
-      - image: maven:3.8.6-openjdk-18
+      - image: maven:3.8.3-openjdk-17
     environment:
       PROTOBUF_REPO: https://github.com/topcoder-platform/rdb-interface-project.git
       PROTOBUF_VERSION: v0.0.1
@@ -11,7 +11,7 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - protobuf-{{ checksum "pom.xml" }}
+            - protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
       - run:
           name: Download and build interface definitions
           command: |
@@ -25,7 +25,7 @@ jobs:
           paths:
             - tc-dal-rdb-proto-1.0-SNAPSHOT.jar
       - save_cache:
-          key: protobuf-{{ checksum "pom.xml" }}
+          key: protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
           paths:
             - protobuf
   build_and_publish_to_ecr:
