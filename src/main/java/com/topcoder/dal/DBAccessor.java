@@ -3,7 +3,6 @@ package com.topcoder.dal;
 import com.topcoder.dal.rdb.*;
 import com.topcoder.dal.util.IdGenerator;
 import com.topcoder.dal.util.QueryHelper;
-import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import jdk.jshell.spi.ExecutionControl;
 import net.devh.boot.grpc.server.service.GrpcService;
@@ -15,11 +14,8 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.DefaultTransactionDefinition;
 
-import java.sql.Types;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 
 /**

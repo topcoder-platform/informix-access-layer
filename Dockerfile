@@ -9,5 +9,7 @@ RUN mvn -f /home/tc-informix-dal/pom.xml package
 
 FROM gcr.io/distroless/java17
 COPY --from=builder /home/tc-informix-dal/target/*.jar /app/informix-access-layer.jar
-COPY scripts /app/scripts
-ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+ENV DB_URL=""
+ENV DB_USERNAME=""
+ENV DB_PASSWORD=""
+ENTRYPOINT ["java", "-jar", "-Dspring.datasource.url=${DB_URL}", "-Dspring.datasource.username=${DB_USERNAME}", "-Dspring.datasource.password=${DB_PASSWORD}", "/app/informix-access-layer.jar"]
