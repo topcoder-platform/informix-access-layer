@@ -1,4 +1,4 @@
-FROM maven:3.8.6-openjdk-18 as builder
+FROM maven:3.8.3-openjdk-17 as builder
 COPY src /home/tc-informix-dal/src
 COPY pom.xml /home/tc-informix-dal
 COPY tc-dal-rdb-proto-1.0-SNAPSHOT.jar /home/tc-informix-dal
