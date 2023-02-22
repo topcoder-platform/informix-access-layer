@@ -90,7 +90,7 @@ public class QueryHelper {
 
         return "UPDATE "
                 + tableName
-                + " SET " + String.join(",", zip(columns, values, (c, v) -> v.equals("CURRENT") ? c + "=" + v :  c + "=" + "\"" + v + "\""))
+                + " SET " + String.join(",", zip(columns, values, (c, v) -> v.contains("CURRENT") ? c + "=" + v :  c + "=" + "\"" + v + "\""))
                 + " WHERE " + String.join(" AND ", whereClause);
     }
 
