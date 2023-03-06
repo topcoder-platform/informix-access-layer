@@ -238,17 +238,24 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
         transactionStatus.set(transactionManager.getTransaction(new DefaultTransactionDefinition(TransactionDefinition.PROPAGATION_REQUIRED)));
 
         return new StreamObserver<>() {
+
             @Override
             public void onNext(QueryRequest request) {
-                QueryResponse response = executeQuery(request.getQuery());
-                if (response == null) {
-                    responseObserver.onError(new ExecutionControl.NotImplementedException("Raw query is not implemented"));
+                try {
+                    QueryResponse response = executeQuery(request.getQuery());
+                    if (response == null) {
+                        responseObserver.onError(new ExecutionControl.NotImplementedException("Raw query is not implemented"));
+                    } else responseObserver.onNext(response);
+                } catch (Exception e) {
+                    System.out.println("Failed with exception: " + e.getMessage());
+                    e.printStackTrace();
+                    onError(e);
                 }
-                else responseObserver.onNext(response);
             }
 
             @Override
             public void onError(Throwable throwable) {
+                System.out.println("Rolling back transaction");
                 transactionManager.rollback(transactionStatus.get());
                 transactionStatus.remove();
 
@@ -257,6 +264,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
             @Override
             public void onCompleted() {
+                System.out.println("Committing transaction");
                 transactionManager.commit(transactionStatus.get());
                 transactionStatus.remove();
 
