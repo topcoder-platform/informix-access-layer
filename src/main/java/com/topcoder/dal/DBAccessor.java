@@ -17,7 +17,6 @@ import org.springframework.transaction.support.DefaultTransactionDefinition;
 import java.util.List;
 import java.util.Objects;
 
-
 /**
  * Accessor for rational database like Informix.
  */
@@ -33,14 +32,14 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
     private final ThreadLocal<TransactionStatus> transactionStatus = new ThreadLocal<>();
 
-
     private final QueryHelper queryHelper;
 
     private final IdGenerator idGenerator;
 
     public DBAccessor(JdbcTemplate jdbcTemplate, QueryHelper queryHelper, IdGenerator idGenerator) {
         this.jdbcTemplate = jdbcTemplate;
-        this.transactionManager = new DataSourceTransactionManager(Objects.requireNonNull(jdbcTemplate.getDataSource()));
+        this.transactionManager = new DataSourceTransactionManager(
+                Objects.requireNonNull(jdbcTemplate.getDataSource()));
         this.queryHelper = queryHelper;
         this.idGenerator = idGenerator;
     }
@@ -114,15 +113,19 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     for (int i = 0; i < rs.getMetaData().getColumnCount(); i++) {
                         String columnName = rs.getMetaData().getColumnName(i + 1);
                         switch (rs.getMetaData().getColumnType(i + 1)) {
-                            case java.sql.Types.DECIMAL -> valueBuilder.setStringValue(rs.getBigDecimal(i + 1).toString());
+                            case java.sql.Types.DECIMAL ->
+                                valueBuilder.setStringValue(rs.getBigDecimal(i + 1).toString());
                             case java.sql.Types.INTEGER -> valueBuilder.setIntValue(rs.getInt(i + 1));
                             case java.sql.Types.BIGINT -> valueBuilder.setLongValue(rs.getLong(i + 1));
                             case java.sql.Types.FLOAT -> valueBuilder.setFloatValue(rs.getFloat(i + 1));
                             case java.sql.Types.DOUBLE -> valueBuilder.setDoubleValue(rs.getDouble(i + 1));
-                            case java.sql.Types.VARCHAR -> valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getString(i + 1), ""));
+                            case java.sql.Types.VARCHAR ->
+                                valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getString(i + 1), ""));
                             case java.sql.Types.BOOLEAN -> valueBuilder.setBooleanValue(rs.getBoolean(i + 1));
-                            case java.sql.Types.DATE, java.sql.Types.TIMESTAMP -> valueBuilder.setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
-                            default -> throw new IllegalArgumentException("Unsupported column type: " + rs.getMetaData().getColumnType(i + 1));
+                            case java.sql.Types.DATE, java.sql.Types.TIMESTAMP -> valueBuilder
+                                    .setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
+                            default -> throw new IllegalArgumentException(
+                                    "Unsupported column type: " + rs.getMetaData().getColumnType(i + 1));
                         }
                         rowBuilder.putValues(columnName, valueBuilder.build());
                     }
@@ -156,11 +159,13 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                             case COLUMN_TYPE_FLOAT -> valueBuilder.setFloatValue(rs.getFloat(i + 1));
                             case COLUMN_TYPE_DOUBLE -> valueBuilder.setDoubleValue(rs.getDouble(i + 1));
                             case COLUMN_TYPE_STRING ->
-                                    valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getString(i + 1), ""));
+                                valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getString(i + 1), ""));
                             case COLUMN_TYPE_BOOLEAN -> valueBuilder.setBooleanValue(rs.getBoolean(i + 1));
-                            case COLUMN_TYPE_DATE, COLUMN_TYPE_DATETIME -> valueBuilder.setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
+                            case COLUMN_TYPE_DATE, COLUMN_TYPE_DATETIME -> valueBuilder
+                                    .setDateValue(Objects.requireNonNullElse(rs.getTimestamp(i + 1), "").toString());
                             default ->
-                                    throw new IllegalArgumentException("Unsupported column type: " + i + ": " + columnTypeMap[i]);
+                                throw new IllegalArgumentException(
+                                        "Unsupported column type: " + i + ": " + columnTypeMap[i]);
                         }
 
                         rowBuilder.putValues(columnList.get(i).getName(), valueBuilder.build());
@@ -173,14 +178,17 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             }
             case INSERT -> {
                 final InsertQuery insertQuery = query.getInsert();
-                final boolean shouldGenerateId = insertQuery.hasIdSequence() && (insertQuery.hasIdColumn() || insertQuery.hasIdTable());
+                final boolean shouldGenerateId = insertQuery.hasIdSequence()
+                        && (insertQuery.hasIdColumn() || insertQuery.hasIdTable());
 
                 final String sql;
                 long id = 0;
                 if (shouldGenerateId) {
                     final String idColumn = insertQuery.getIdColumn();
                     final String idSequence = insertQuery.getIdSequence();
-                    id = idSequence.equalsIgnoreCase("MAX") ? idGenerator.getMaxId(insertQuery.getIdTable(), insertQuery.getIdColumn()) : idGenerator.getNextId(idSequence);
+                    id = idSequence.equalsIgnoreCase("MAX")
+                            ? idGenerator.getMaxId(insertQuery.getIdTable(), insertQuery.getIdColumn())
+                            : idGenerator.getNextId(idSequence);
                     sql = queryHelper.getInsertQuery(insertQuery, idColumn, String.valueOf(id));
                 } else {
                     sql = queryHelper.getInsertQuery(insertQuery);
@@ -232,10 +240,10 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
         responseObserver.onCompleted();
     }
 
-
     @Override
     public StreamObserver<QueryRequest> streamQuery(StreamObserver<QueryResponse> responseObserver) {
-        transactionStatus.set(transactionManager.getTransaction(new DefaultTransactionDefinition(TransactionDefinition.PROPAGATION_REQUIRED)));
+        transactionStatus.set(transactionManager
+                .getTransaction(new DefaultTransactionDefinition(TransactionDefinition.PROPAGATION_REQUIRED)));
 
         return new StreamObserver<>() {
 
@@ -244,8 +252,10 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 try {
                     QueryResponse response = executeQuery(request.getQuery());
                     if (response == null) {
-                        responseObserver.onError(new ExecutionControl.NotImplementedException("Raw query is not implemented"));
-                    } else responseObserver.onNext(response);
+                        responseObserver
+                                .onError(new ExecutionControl.NotImplementedException("Raw query is not implemented"));
+                    } else
+                        responseObserver.onNext(response);
                 } catch (Exception e) {
                     System.out.println("Failed with exception: " + e.getMessage());
                     e.printStackTrace();
