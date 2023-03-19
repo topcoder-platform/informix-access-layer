@@ -38,7 +38,7 @@
 		<dependency>
 			<groupId>com.topcoder</groupId>
 			<artifactId>tc-dal-rdb-proto</artifactId>
-			<version>1.0-SNAPSHOT</version>
+			<version>1.1-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 	<build>
