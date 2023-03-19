@@ -1,9 +1,10 @@
 package com.topcoder.dal.util;
 
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 
@@ -14,12 +15,13 @@ public class IdGenerator {
 
     private final HashMap<String, long[]> sequenceNames = new HashMap<>();
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public long getNextId(final String sequenceName) {
         long availableId = 0;
         long nextId = 0;
 
         if (!sequenceNames.containsKey(sequenceName)) {
-            sequenceNames.put(sequenceName, new long[]{availableId, nextId});
+            sequenceNames.put(sequenceName, new long[] { availableId, nextId });
         }
 
         final long[] ids = sequenceNames.get(sequenceName);
@@ -44,7 +46,7 @@ public class IdGenerator {
 
         nextId++;
 
-        sequenceNames.put(sequenceName, new long[]{availableId, nextId});
+        sequenceNames.put(sequenceName, new long[] { availableId, nextId });
 
         return nextId;
     }
@@ -54,7 +56,7 @@ public class IdGenerator {
         System.out.println("SQL: " + sql);
 
         return jdbcTemplate.query(sql, rs -> {
-            long[] ret = {0, 0};
+            long[] ret = { 0, 0 };
             if (rs.next()) {
                 long nextBlockStart = rs.getLong("next_block_start");
                 int blockSize = rs.getInt("block_size");
@@ -85,7 +87,6 @@ public class IdGenerator {
 
             return 0;
         });
-
 
         assert maxId != null;
         return maxId.longValue();

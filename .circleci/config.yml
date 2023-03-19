@@ -6,7 +6,7 @@ jobs:
       - image: maven:3.8.3-openjdk-17
     environment:
       PROTOBUF_REPO: https://github.com/topcoder-platform/rdb-interface-project.git
-      PROTOBUF_VERSION: v0.0.2
+      PROTOBUF_VERSION: v0.0.3
     steps:
       - checkout
       - restore_cache:
@@ -67,7 +67,9 @@ workflows:
           context: "org-global"
           filters:
             branches:
-              only: "main"
+              only:
+                - "main"
+                - "feat/error-handling"
       - build_and_publish_to_ecr:
           context: "org-global"
           requires:
