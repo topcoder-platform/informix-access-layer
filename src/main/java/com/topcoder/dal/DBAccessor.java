@@ -291,8 +291,8 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             private final Duration streamTimeout = Duration.ofSeconds(10);
             Duration DEBOUNCE_INTERVAL = Duration.ofMillis(100);
             AtomicLong lastTimerReset = new AtomicLong(System.nanoTime() - DEBOUNCE_INTERVAL.toNanos() - 1);
-            AtomicReference<ScheduledFuture<?>> streamTimeoutFuture = new AtomicReference<>();
             private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
+            AtomicReference<ScheduledFuture<?>> streamTimeoutFuture = new AtomicReference<>(scheduleStreamTimeout());
 
             @Override
             public void onNext(QueryRequest request) {
@@ -310,6 +310,8 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             @Override
             public void onError(Throwable throwable) {
                 logger.error("Error from client", throwable);
+                rollback();
+                cancelStreamTimeout();
             }
 
             @Override
