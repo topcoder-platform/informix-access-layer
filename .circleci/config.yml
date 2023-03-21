@@ -9,9 +9,9 @@ jobs:
       PROTOBUF_VERSION: v0.0.4
     steps:
       - checkout
-      - restore_cache:
-          keys:
-            - protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
+#      - restore_cache:
+#          keys:
+#            - protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
       - run:
           name: Download and build interface definitions
           command: |
@@ -24,10 +24,10 @@ jobs:
           root: protobuf/target
           paths:
             - tc-dal-rdb-proto-1.1-SNAPSHOT.jar
-      - save_cache:
-          key: protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
-          paths:
-            - protobuf
+#      - save_cache:
+#          key: protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
+#          paths:
+#            - protobuf
   build_and_publish_to_ecr:
     docker:
       - image: cimg/aws:2023.01
