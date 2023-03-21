@@ -8,6 +8,7 @@ import java.util.List;
 
 import javax.sql.DataSource;
 
+import static org.jooq.impl.DSL.field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -37,9 +38,7 @@ public class StreamJdbcTemplate extends JdbcTemplate {
     public <T> T query(final String sql, final ResultSetExtractor<T> rse, Connection con) throws DataAccessException {
         Assert.notNull(sql, "SQL must not be null");
         Assert.notNull(rse, "ResultSetExtractor must not be null");
-        if (logger.isDebugEnabled()) {
-            logger.debug("Executing SQL query [" + sql + "]");
-        }
+        logger.info("Executing SQL query: {}", field(sql));
 
         class QueryStatementCallback implements StatementCallback<T>, SqlProvider {
             @Override
@@ -65,9 +64,7 @@ public class StreamJdbcTemplate extends JdbcTemplate {
 
     public int update(final String sql, Connection con) throws DataAccessException {
         Assert.notNull(sql, "SQL must not be null");
-        if (logger.isDebugEnabled()) {
-            logger.debug("Executing SQL update [" + sql + "]");
-        }
+        logger.info("Executing SQL query: {}", field(sql));
 
         class UpdateStatementCallback implements StatementCallback<Integer>, SqlProvider {
             @Override
