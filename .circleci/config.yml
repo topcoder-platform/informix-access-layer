@@ -32,7 +32,7 @@ jobs:
     docker:
       - image: cimg/aws:2023.01
     environment:
-      ECR_ENV: QA
+      ECR_ENV: DEV
       SERVICE_NAME: "informix-access-layer"
       OUT_DIR: "buildscripts"
     steps:
