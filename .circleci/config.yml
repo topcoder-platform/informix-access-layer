@@ -6,7 +6,7 @@ jobs:
       - image: maven:3.8.3-openjdk-17
     environment:
       PROTOBUF_REPO: https://github.com/topcoder-platform/rdb-interface-project.git
-      PROTOBUF_VERSION: v0.0.3
+      PROTOBUF_VERSION: v0.0.4
     steps:
       - checkout
       - restore_cache:
@@ -23,7 +23,7 @@ jobs:
       - persist_to_workspace:
           root: protobuf/target
           paths:
-            - tc-dal-rdb-proto-1.0-SNAPSHOT.jar
+            - tc-dal-rdb-proto-1.1-SNAPSHOT.jar
       - save_cache:
           key: protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
           paths:
