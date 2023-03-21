@@ -40,6 +40,11 @@
 			<artifactId>tc-dal-rdb-proto</artifactId>
 			<version>1.1-SNAPSHOT</version>
 		</dependency>
+		<dependency>
+			<groupId>org.jooq</groupId>
+			<artifactId>jooq</artifactId>
+			<version>3.18.0</version>
+		</dependency>
 	</dependencies>
 	<build>
 		<plugins>

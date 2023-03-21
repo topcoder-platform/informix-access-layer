@@ -11,6 +11,7 @@ import io.grpc.stub.StreamObserver;
 import jdk.jshell.spi.ExecutionControl;
 import net.devh.boot.grpc.server.service.GrpcService;
 
+import static org.jooq.impl.DSL.field;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -36,7 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @GrpcService
 public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
-    private Logger logger = LoggerFactory.getLogger(this.getClass());
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
     private final StreamJdbcTemplate jdbcTemplate;
 
@@ -168,7 +169,10 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             case RAW -> {
                 final RawQuery rawQuery = query.getRaw();
                 final String sql = queryHelper.getRawQuery(rawQuery);
-                logger.info("Executing SQL query [" + sql + "]");
+                // format SQL and log the query
+
+                logger.info("Executing SQL query: {}", field(sql));
+
                 List<Row> rows;
                 if (con != null) {
                     rows = jdbcTemplate.query((sql), (rs, rowNum) -> rawQueryMapper(rs, rowNum), con);
@@ -184,7 +188,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 final SelectQuery selectQuery = query.getSelect();
                 final String sql = queryHelper.getSelectQuery(selectQuery);
 
-                logger.info("Executing SQL query [" + sql + "]");
+                logger.info("Executing SQL query: {}", field(sql));
 
                 final List<Column> columnList = selectQuery.getColumnList();
                 final int numColumns = columnList.size();
@@ -222,7 +226,8 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     sql = queryHelper.getInsertQuery(insertQuery);
                 }
 
-                logger.info("Executing SQL query [" + sql + "]");
+                logger.info("Executing SQL query: {}", field(sql));
+
                 if (con != null) {
                     jdbcTemplate.update(sql, con);
                 } else {
@@ -241,7 +246,9 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             case UPDATE -> {
                 final UpdateQuery updateQuery = query.getUpdate();
                 final String sql = queryHelper.getUpdateQuery(updateQuery);
-                logger.info("Executing SQL query [" + sql + "]");
+
+                logger.info("Executing SQL query: {}", field(sql));
+
                 int updateCount = 0;
                 if (con != null) {
                     updateCount = jdbcTemplate.update(sql, con);
@@ -255,7 +262,9 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             case DELETE -> {
                 final DeleteQuery deleteQuery = query.getDelete();
                 final String sql = queryHelper.getDeleteQuery(deleteQuery);
-                logger.info("Executing SQL query [" + sql + "]");
+
+                logger.info("Executing SQL query: {}", field(sql));
+
                 int deleteCount = 0;
                 if (con != null) {
                     deleteCount = jdbcTemplate.update(sql, con);
