@@ -6,7 +6,6 @@ import com.topcoder.dal.util.IdGenerator;
 import com.topcoder.dal.util.QueryHelper;
 import com.topcoder.dal.util.StreamJdbcTemplate;
 
-import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import jdk.jshell.spi.ExecutionControl;
 import net.devh.boot.grpc.server.service.GrpcService;
@@ -365,7 +364,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     logger.error(message);
                     rollback();
                     cancelStreamTimeout();
-                    responseObserver.onError(Status.DEADLINE_EXCEEDED.withDescription(message).asRuntimeException());
+                    responseObserver.onCompleted();
                 }, streamTimeout.plus(DEBOUNCE_INTERVAL).toNanos(), TimeUnit.NANOSECONDS);
             }
         };
