@@ -32,7 +32,7 @@ jobs:
     docker:
       - image: cimg/aws:2023.01
     environment:
-      ECR_ENV: DEV
+      ECR_ENV: PROD
       SERVICE_NAME: "informix-access-layer"
       OUT_DIR: "buildscripts"
     steps:
@@ -65,20 +65,10 @@ workflows:
     jobs:
       - build_interface_definitions:
           context: "org-global"
-          environment:
-            ECR_ENV: PROD
           filters:
             branches:
               only:
                 - "main"
-      - build_interface_definitions:
-          context: "org-global"
-          environment:
-            ECR_ENV: DEV
-          filters:
-            branches:
-              only:
-                - "dev"
       - build_and_publish_to_ecr:
           context: "org-global"
           requires:
