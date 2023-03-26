@@ -65,11 +65,20 @@ workflows:
     jobs:
       - build_interface_definitions:
           context: "org-global"
+          environment:
+            ECR_ENV: PROD
           filters:
             branches:
               only:
                 - "main"
-                - "feat/error-handling"
+      - build_interface_definitions:
+          context: "org-global"
+          environment:
+            ECR_ENV: DEV
+          filters:
+            branches:
+              only:
+                - "dev"
       - build_and_publish_to_ecr:
           context: "org-global"
           requires:
