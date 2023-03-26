@@ -171,17 +171,32 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 // format SQL and log the query
 
                 logger.info("Executing SQL query: {}", field(sql));
+                boolean isSelect = sql.trim().toLowerCase().startsWith("select");
 
-                List<Row> rows;
+                List<Row> rows = null;
+                int updateCount = 0;
                 if (con != null) {
-                    rows = jdbcTemplate.query((sql), (rs, rowNum) -> rawQueryMapper(rs, rowNum), con);
+                    if (isSelect) {
+                        rows = jdbcTemplate.query((sql), this::rawQueryMapper, con);
+                    } else {
+                        updateCount = jdbcTemplate.update((sql), con);
+                    }
                 } else {
-                    rows = jdbcTemplate.query((sql), (rs, rowNum) -> rawQueryMapper(rs, rowNum));
+                    if (isSelect) {
+                        rows = jdbcTemplate.query((sql), this::rawQueryMapper);
+                    } else {
+                        updateCount = jdbcTemplate.update((sql));
+                    }
                 }
-
-                return QueryResponse.newBuilder()
-                        .setRawResult(RawQueryResult.newBuilder().addAllRows(rows).build())
-                        .build();
+                if (isSelect) {
+                    return QueryResponse.newBuilder()
+                            .setRawResult(RawQueryResult.newBuilder().addAllRows(rows).build())
+                            .build();
+                } else {
+                    return QueryResponse.newBuilder()
+                            .setUpdateResult(UpdateQueryResult.newBuilder().setAffectedRows(updateCount).build())
+                            .build();
+                }
             }
             case SELECT -> {
                 final SelectQuery selectQuery = query.getSelect();
