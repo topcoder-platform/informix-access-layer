@@ -24,7 +24,7 @@ public class QueryHelper {
                 .toArray(String[]::new);
 
         final List<ParameterizedExpression> whereClause = query.getWhereList().stream()
-                .map(toParamWhereCriteria).toList();
+                .map(toWhereCriteria).toList();
 
         final Join[] joins = query.getJoinList().toArray(new Join[0]);
 
@@ -67,7 +67,7 @@ public class QueryHelper {
         Stream<Object> paramStream = valuesToInsert.stream()
                 .map(ColumnValue::getValue)
                 .filter(x -> !isValueCurrent(x))
-                .map(QueryHelper::toParamValue);
+                .map(QueryHelper::toValue);
 
         String[] values = valuesToInsert.stream()
                 .map(ColumnValue::getValue)
@@ -90,42 +90,54 @@ public class QueryHelper {
         return expression;
     }
 
-    public String getUpdateQuery(UpdateQuery query) {
+    public ParameterizedExpression getUpdateQuery(UpdateQuery query) {
         final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
 
         final List<ColumnValue> valuesToUpdate = query.getColumnValueList();
         final String[] columns = valuesToUpdate.stream().map(ColumnValue::getColumn).toArray(String[]::new);
-        final String[] values = valuesToUpdate.stream().map(ColumnValue::getValue).map(QueryHelper::toValue)
+        final String[] values = valuesToUpdate.stream().map(ColumnValue::getValue)
+                .map(x -> isValueCurrent(x) ? "CURRENT" : "?")
                 .toArray(String[]::new);
+        final List<Object> params = valuesToUpdate.stream()
+                .map(ColumnValue::getValue)
+                .filter(x -> !isValueCurrent(x))
+                .map(QueryHelper::toValue).toList();
 
-        final String[] whereClause = query.getWhereList().stream()
-                .map(toWhereCriteria)
-                .toArray(String[]::new);
+        final List<ParameterizedExpression> whereClause = query.getWhereList().stream()
+                .map(toWhereCriteria).toList();
 
-        if (whereClause.length == 0) {
+        if (whereClause.isEmpty()) {
             throw new RuntimeException("Update query must have a where clause");
         }
+        params.addAll(whereClause.stream().filter(x -> x.parameter.length > 0).map(x -> x.getParameter()[0]).toList());
 
-        return "UPDATE "
+        ParameterizedExpression expression = new ParameterizedExpression();
+        expression.setExpression("UPDATE "
                 + tableName
                 + " SET " + String.join(",", zip(columns, values, (c, v) -> c + "=" + v))
-                + " WHERE " + String.join(" AND ", whereClause);
+                + " WHERE "
+                + String.join(" AND ", whereClause.stream().map(x -> x.getExpression()).toArray(String[]::new)));
+        expression.setParameter(params.toArray());
+        return expression;
     }
 
-    public String getDeleteQuery(DeleteQuery query) {
+    public ParameterizedExpression getDeleteQuery(DeleteQuery query) {
         final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
 
-        final String[] whereClause = query.getWhereList().stream()
-                .map(toWhereCriteria)
-                .toArray(String[]::new);
+        final List<ParameterizedExpression> whereClause = query.getWhereList().stream()
+                .map(toWhereCriteria).toList();
 
-        if (whereClause.length == 0) {
+        if (whereClause.isEmpty()) {
             throw new IllegalArgumentException("Delete query must have a where clause");
         }
-
-        return "DELETE FROM "
+        ParameterizedExpression expression = new ParameterizedExpression();
+        expression.setExpression("DELETE FROM "
                 + tableName
-                + " WHERE " + String.join(" AND ", whereClause);
+                + " WHERE "
+                + String.join(" AND ", whereClause.stream().map(x -> x.getExpression()).toArray(String[]::new)));
+        expression.setParameter(
+                whereClause.stream().filter(x -> x.parameter.length > 0).map(x -> x.getParameter()[0]).toArray());
+        return expression;
     }
 
     public String getRawQuery(RawQuery query) {
@@ -172,30 +184,9 @@ public class QueryHelper {
                 + fromColumn;
     };
 
-    private static final Function<WhereCriteria, String> toWhereCriteria = (criteria) -> {
+    private Function<WhereCriteria, ParameterizedExpression> toWhereCriteria = (criteria) -> {
         String key = criteria.getKey();
-        String value = toValue(criteria.getValue());
-
-        return switch (criteria.getOperator()) {
-            case OPERATOR_EQUAL -> key + "=" + value;
-            case OPERATOR_NOT_EQUAL -> key + "<>" + value;
-            case OPERATOR_GREATER_THAN -> key + ">" + value;
-            case OPERATOR_GREATER_THAN_OR_EQUAL -> key + ">=" + value;
-            case OPERATOR_LESS_THAN -> key + "<" + value;
-            case OPERATOR_LESS_THAN_OR_EQUAL -> key + "<=" + value;
-            case OPERATOR_LIKE -> key + " LIKE " + value;
-            case OPERATOR_NOT_LIKE -> key + " NOT LIKE " + value;
-            case OPERATOR_IN -> key + " IN (" + value + ")";
-            case OPERATOR_NOT_IN -> key + " NOT IN (" + value + ")";
-            case OPERATOR_IS_NULL -> key + " IS NULL";
-            case OPERATOR_IS_NOT_NULL -> key + " IS NOT NULL";
-            default -> null;
-        };
-    };
-
-    private Function<WhereCriteria, ParameterizedExpression> toParamWhereCriteria = (criteria) -> {
-        String key = criteria.getKey();
-        Object value = toParamValue(criteria.getValue());
+        Object value = toValue(criteria.getValue());
         ParameterizedExpression parameterizedExpression = new ParameterizedExpression();
 
         String clause = switch (criteria.getOperator()) {
@@ -224,23 +215,7 @@ public class QueryHelper {
         return parameterizedExpression;
     };
 
-    private static String toValue(Value value) {
-        return switch (value.getValueCase()) {
-            case STRING_VALUE -> "'" + value.getStringValue() + "'";
-            case INT_VALUE -> String.valueOf(value.getIntValue());
-            case LONG_VALUE -> String.valueOf(value.getLongValue());
-            case DOUBLE_VALUE -> String.valueOf(value.getDoubleValue());
-            case FLOAT_VALUE -> String.valueOf(value.getFloatValue());
-            case BOOLEAN_VALUE -> String.valueOf(value.getBooleanValue());
-            case DATE_VALUE ->
-                value.getDateValue().contains("CURRENT") ? value.getDateValue() : "'" + value.getDateValue() + "'";
-            case DATETIME_VALUE -> value.getDatetimeValue().contains("CURRENT") ? value.getDatetimeValue()
-                    : "'" + value.getDatetimeValue() + "'";
-            case BLOB_VALUE, VALUE_NOT_SET -> null;
-        };
-    }
-
-    private static Object toParamValue(Value value) {
+    private static Object toValue(Value value) {
         return switch (value.getValueCase()) {
             case STRING_VALUE -> value.getStringValue();
             case INT_VALUE -> value.getIntValue();
