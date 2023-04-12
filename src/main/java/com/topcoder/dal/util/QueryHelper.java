@@ -102,10 +102,10 @@ public class QueryHelper {
         final String[] values = valuesToUpdate.stream().map(ColumnValue::getValue)
                 .map(x -> isValueCurrent(x) ? "CURRENT" : "?")
                 .toArray(String[]::new);
-        final List<Object> params = valuesToUpdate.stream()
+        final Stream<Object> paramsStream = valuesToUpdate.stream()
                 .map(ColumnValue::getValue)
                 .filter(x -> !isValueCurrent(x))
-                .map(QueryHelper::toValue).toList();
+                .map(QueryHelper::toValue);
 
         final List<ParameterizedExpression> whereClause = query.getWhereList().stream()
                 .map(toWhereCriteria).toList();
@@ -113,7 +113,10 @@ public class QueryHelper {
         if (whereClause.isEmpty()) {
             throw new RuntimeException("Update query must have a where clause");
         }
-        params.addAll(whereClause.stream().filter(x -> x.parameter.length > 0).map(x -> x.getParameter()[0]).toList());
+        final Object[] params = Stream
+                .concat(paramsStream,
+                        whereClause.stream().filter(x -> x.parameter.length > 0).map(x -> x.getParameter()[0]))
+                .toArray();
 
         ParameterizedExpression expression = new ParameterizedExpression();
         expression.setExpression("UPDATE "
@@ -121,7 +124,7 @@ public class QueryHelper {
                 + " SET " + String.join(",", zip(columns, values, (c, v) -> c + "=" + v))
                 + " WHERE "
                 + String.join(" AND ", whereClause.stream().map(x -> x.getExpression()).toArray(String[]::new)));
-        expression.setParameter(params.toArray());
+        expression.setParameter(params);
         return expression;
     }
 
