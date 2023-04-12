@@ -69,19 +69,23 @@ public class QueryHelper {
                 .filter(x -> !isValueCurrent(x))
                 .map(QueryHelper::toValue);
 
-        String[] values = valuesToInsert.stream()
+        Stream<String> valuesStream = valuesToInsert.stream()
                 .map(ColumnValue::getValue)
-                .map(x -> isValueCurrent(x) ? "CURRENT" : "?").toArray(String[]::new);
+                .map(x -> isValueCurrent(x) ? "CURRENT" : "?");
 
         final String[] columns;
+        final String[] values;
         final Object[] params;
 
         if (query.hasIdColumn() && query.hasIdSequence()) {
             columns = Stream.concat(Stream.of(idColumn), columnsStream).toArray(String[]::new);
             params = Stream.concat(Stream.of(idValue), paramStream).toArray();
+            values = Stream.concat(Stream.of("?"), valuesStream).toArray(String[]::new);
+
         } else {
             columns = columnsStream.toArray(String[]::new);
             params = paramStream.toArray();
+            values = valuesStream.toArray(String[]::new);
         }
         ParameterizedExpression expression = new ParameterizedExpression();
         expression.setExpression("INSERT INTO " + tableName + " (" + String.join(",", columns) + ") VALUES ("
