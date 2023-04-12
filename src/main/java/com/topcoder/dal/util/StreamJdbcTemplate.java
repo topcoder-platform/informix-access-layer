@@ -1,6 +1,7 @@
 package com.topcoder.dal.util;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -13,6 +14,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ParameterDisposer;
+import org.springframework.jdbc.core.PreparedStatementCallback;
+import org.springframework.jdbc.core.PreparedStatementCreator;
+import org.springframework.jdbc.core.PreparedStatementSetter;
 import org.springframework.jdbc.core.ResultSetExtractor;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.RowMapperResultSetExtractor;
@@ -31,6 +36,52 @@ public class StreamJdbcTemplate extends JdbcTemplate {
 
     public <T> List<T> query(String sql, RowMapper<T> rowMapper, Connection con) throws DataAccessException {
         return result(query(sql, new RowMapperResultSetExtractor<>(rowMapper), con));
+    }
+
+    public <T> List<T> query(String sql, RowMapper<T> rowMapper, Connection con, @Nullable Object... args)
+            throws DataAccessException {
+        return result(query(sql, args, new RowMapperResultSetExtractor<>(rowMapper), con));
+    }
+
+    @Nullable
+    public <T> T query(String sql, @Nullable Object[] args, ResultSetExtractor<T> rse, Connection con)
+            throws DataAccessException {
+        return query(sql, newArgPreparedStatementSetter(args), rse, con);
+    }
+
+    @Nullable
+    public <T> T query(String sql, @Nullable PreparedStatementSetter pss, ResultSetExtractor<T> rse, Connection con)
+            throws DataAccessException {
+        return query(new SimplePreparedStatementCreator(sql), pss, rse, con);
+    }
+
+    @Nullable
+    public <T> T query(
+            PreparedStatementCreator psc, @Nullable final PreparedStatementSetter pss, final ResultSetExtractor<T> rse,
+            Connection con)
+            throws DataAccessException {
+
+        Assert.notNull(rse, "ResultSetExtractor must not be null");
+
+        return execute(psc, new PreparedStatementCallback<T>() {
+            @Override
+            @Nullable
+            public T doInPreparedStatement(PreparedStatement ps) throws SQLException {
+                ResultSet rs = null;
+                try {
+                    if (pss != null) {
+                        pss.setValues(ps);
+                    }
+                    rs = ps.executeQuery();
+                    return rse.extractData(rs);
+                } finally {
+                    closeResultSet(rs);
+                    if (pss instanceof ParameterDisposer) {
+                        ((ParameterDisposer) pss).cleanupParameters();
+                    }
+                }
+            }
+        }, con);
     }
 
     @Nullable
@@ -82,6 +133,32 @@ public class StreamJdbcTemplate extends JdbcTemplate {
         return updateCount(execute(new UpdateStatementCallback(), con));
     }
 
+    public int update(String sql, Connection con, @Nullable Object... args) throws DataAccessException {
+        return update(sql, newArgPreparedStatementSetter(args), con);
+    }
+
+    public int update(String sql, @Nullable PreparedStatementSetter pss, Connection con) throws DataAccessException {
+        return update(new SimplePreparedStatementCreator(sql), pss, con);
+    }
+
+    private int update(final PreparedStatementCreator psc, @Nullable final PreparedStatementSetter pss, Connection con)
+            throws DataAccessException {
+
+        return updateCount(execute(psc, ps -> {
+            try {
+                if (pss != null) {
+                    pss.setValues(ps);
+                }
+                int rows = ps.executeUpdate();
+                return rows;
+            } finally {
+                if (pss instanceof ParameterDisposer) {
+                    ((ParameterDisposer) pss).cleanupParameters();
+                }
+            }
+        }, con));
+    }
+
     @Nullable
     private <T> T execute(StatementCallback<T> action, Connection con) throws DataAccessException {
         Assert.notNull(action, "Callback object must not be null");
@@ -102,6 +179,37 @@ public class StreamJdbcTemplate extends JdbcTemplate {
     }
 
     @Nullable
+    private <T> T execute(PreparedStatementCreator psc, PreparedStatementCallback<T> action, Connection con)
+            throws DataAccessException {
+
+        Assert.notNull(psc, "PreparedStatementCreator must not be null");
+        Assert.notNull(action, "Callback object must not be null");
+
+        PreparedStatement ps = null;
+        try {
+            ps = psc.createPreparedStatement(con);
+            applyStatementSettings(ps);
+            T result = action.doInPreparedStatement(ps);
+            handleWarnings(ps);
+            return result;
+        } catch (SQLException ex) {
+            if (psc instanceof ParameterDisposer) {
+                ((ParameterDisposer) psc).cleanupParameters();
+            }
+            String sql = getSql(psc);
+            psc = null;
+            closeStatement(ps);
+            ps = null;
+            throw translateException("PreparedStatementCallback", sql, ex);
+        } finally {
+            if (psc instanceof ParameterDisposer) {
+                ((ParameterDisposer) psc).cleanupParameters();
+            }
+            closeStatement(ps);
+        }
+    }
+
+    @Nullable
     private static String getSql(Object sqlProvider) {
         if (sqlProvider instanceof SqlProvider) {
             return ((SqlProvider) sqlProvider).getSql();
@@ -118,6 +226,26 @@ public class StreamJdbcTemplate extends JdbcTemplate {
     private static <T> T result(@Nullable T result) {
         Assert.state(result != null, "No result");
         return result;
+    }
+
+    private static class SimplePreparedStatementCreator implements PreparedStatementCreator, SqlProvider {
+
+        private final String sql;
+
+        public SimplePreparedStatementCreator(String sql) {
+            Assert.notNull(sql, "SQL must not be null");
+            this.sql = sql;
+        }
+
+        @Override
+        public PreparedStatement createPreparedStatement(Connection con) throws SQLException {
+            return con.prepareStatement(this.sql);
+        }
+
+        @Override
+        public String getSql() {
+            return this.sql;
+        }
     }
 
     public Connection getConnection() throws CannotGetJdbcConnectionException {

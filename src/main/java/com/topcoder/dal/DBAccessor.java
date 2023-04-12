@@ -216,7 +216,8 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 List<Row> rows;
                 if (con != null) {
                     rows = jdbcTemplate.query(sql.getExpression(),
-                            (rs, rowNum) -> selectQueryMapper(rs, rowNum, numColumns, columnTypeMap, columnList), con);
+                            (rs, rowNum) -> selectQueryMapper(rs, rowNum, numColumns, columnTypeMap, columnList), con,
+                            sql.getParameter());
                 } else {
                     rows = jdbcTemplate.query(sql.getExpression(),
                             (rs, rowNum) -> selectQueryMapper(rs, rowNum, numColumns, columnTypeMap, columnList),
@@ -248,7 +249,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                         Arrays.toString(sql.getParameter()));
 
                 if (con != null) {
-                    jdbcTemplate.update(sql.getExpression(), con);
+                    jdbcTemplate.update(sql.getExpression(), con, sql.getParameter());
                 } else {
                     jdbcTemplate.update(sql.getExpression(), sql.getParameter());
                 }
@@ -271,7 +272,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
                 int updateCount = 0;
                 if (con != null) {
-                    updateCount = jdbcTemplate.update(sql.getExpression(), con);
+                    updateCount = jdbcTemplate.update(sql.getExpression(), con, sql.getParameter());
                 } else {
                     updateCount = jdbcTemplate.update(sql.getExpression(), sql.getParameter());
                 }
@@ -288,7 +289,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
                 int deleteCount = 0;
                 if (con != null) {
-                    deleteCount = jdbcTemplate.update(sql.getExpression(), con);
+                    deleteCount = jdbcTemplate.update(sql.getExpression(), con, sql.getParameter());
                 } else {
                     deleteCount = jdbcTemplate.update(sql.getExpression(), sql.getParameter());
                 }
