@@ -45,6 +45,11 @@ jobs:
           command: |
             docker build -t ${SERVICE_NAME}:${CIRCLE_SHA1} .
       - run:
+          name: "Setup deploy scripts"
+          command: |
+            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../${OUT_DIR}
+            cp ./../${OUT_DIR}/awsconfiguration.sh .
+      - run:
           name: "Set ECR_ENV based on event type"
           command: |
             if [ "${CIRCLE_PULL_REQUEST}" != "" ]; then
@@ -53,11 +58,6 @@ jobs:
               export ECR_ENV="PROD"
             fi
             echo "Using ECR Environment: ${ECR_ENV}"
-      - run:
-          name: "Set AWS environment variables"
-          command: |
-            git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../${OUT_DIR}
-            cp ./../${OUT_DIR}/awsconfiguration.sh .
             ./awsconfiguration.sh ${ECR_ENV}
       - run:
           name: "Publish docker image"
