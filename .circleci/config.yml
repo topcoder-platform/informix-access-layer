@@ -9,9 +9,9 @@ jobs:
       PROTOBUF_VERSION: v0.0.4
     steps:
       - checkout
-#      - restore_cache:
-#          keys:
-#            - protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
+      #      - restore_cache:
+      #          keys:
+      #            - protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
       - run:
           name: Download and build interface definitions
           command: |
@@ -24,15 +24,14 @@ jobs:
           root: protobuf/target
           paths:
             - tc-dal-rdb-proto-1.1-SNAPSHOT.jar
-#      - save_cache:
-#          key: protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
-#          paths:
-#            - protobuf
+  #      - save_cache:
+  #          key: protobuf-$PROTOBUF_VERSION-{{ checksum "pom.xml" }}
+  #          paths:
+  #            - protobuf
   build_and_publish_to_ecr:
     docker:
       - image: cimg/aws:2023.01
     environment:
-      ECR_ENV: DEV
       SERVICE_NAME: "informix-access-layer"
       OUT_DIR: "buildscripts"
     steps:
@@ -46,10 +45,19 @@ jobs:
           command: |
             docker build -t ${SERVICE_NAME}:${CIRCLE_SHA1} .
       - run:
-          name: "Set AWS environment variables"
+          name: "Setup deploy scripts"
           command: |
             git clone -b v1.4 https://github.com/topcoder-platform/tc-deploy-scripts ../${OUT_DIR}
             cp ./../${OUT_DIR}/awsconfiguration.sh .
+      - run:
+          name: "Set ECR_ENV based on event type"
+          command: |
+            if [ "${CIRCLE_PULL_REQUEST}" != "" ]; then
+              export ECR_ENV="DEV"
+            else
+              export ECR_ENV="PROD"
+            fi
+            echo "Using ECR Environment: ${ECR_ENV}"
             ./awsconfiguration.sh ${ECR_ENV}
       - run:
           name: "Publish docker image"
@@ -65,10 +73,6 @@ workflows:
     jobs:
       - build_interface_definitions:
           context: "org-global"
-          filters:
-            branches:
-              only:
-                - "main"
       - build_and_publish_to_ecr:
           context: "org-global"
           requires:

@@ -1,6 +1,8 @@
 package com.topcoder.dal.util;
 
 import com.topcoder.dal.rdb.*;
+import com.topcoder.dal.rdb.Value.ValueCase;
+
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -11,18 +13,18 @@ import java.util.stream.Stream;
 @Component
 public class QueryHelper {
 
-    public String getSelectQuery(SelectQuery query) {
+    public ParameterizedExpression getSelectQuery(SelectQuery query) {
         final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
 
         List<Column> columnsList = query.getColumnList();
 
         final String[] columns = columnsList.stream()
-                .map((column -> column.hasTableName() ? column.getTableName() + "." + column.getName() : column.getName()))
+                .map((column -> column.hasTableName() ? column.getTableName() + "." + column.getName()
+                        : column.getName()))
                 .toArray(String[]::new);
 
-        final String[] whereClause = query.getWhereList().stream()
-                .map(toWhereCriteria)
-                .toArray(String[]::new);
+        final List<ParameterizedExpression> whereClause = query.getWhereList().stream()
+                .map(toWhereCriteria).toList();
 
         final Join[] joins = query.getJoinList().toArray(new Join[0]);
 
@@ -32,82 +34,117 @@ public class QueryHelper {
         final int limit = query.getLimit();
         final int offset = query.getOffset();
 
-        return "SELECT"
+        ParameterizedExpression expression = new ParameterizedExpression();
+        expression.setExpression("SELECT"
                 + (offset > 0 ? " SKIP " + offset : "")
                 + (limit > 0 ? " FIRST " + limit : "")
                 + (" " + String.join(",", columns) + " FROM " + tableName)
                 + (joins.length > 0 ? " " + String.join(" ", Stream.of(joins).map(toJoin).toArray(String[]::new)) : "")
-                + (whereClause.length > 0 ? " WHERE " + String.join(" AND ", whereClause) : "")
+                + (!whereClause.isEmpty()
+                        ? " WHERE " + String.join(" AND ",
+                                whereClause.stream().map(x -> x.getExpression()).toArray(String[]::new))
+                        : "")
                 + (groupByClause.length > 0 ? " GROUP BY " + String.join(",", groupByClause) : "")
-                + (orderByClause.length > 0 ? " ORDER BY " + String.join(",", orderByClause) : "");
+                + (orderByClause.length > 0 ? " ORDER BY " + String.join(",", orderByClause) : ""));
+        if (!whereClause.isEmpty()) {
+            expression.setParameter(
+                    whereClause.stream().filter(x -> x.parameter.length > 0).map(x -> x.getParameter()[0]).toArray());
+        }
+        return expression;
     }
 
-
-    public String getInsertQuery(InsertQuery query) {
+    public ParameterizedExpression getInsertQuery(InsertQuery query) {
         return getInsertQuery(query, null, null);
     }
 
-    public String getInsertQuery(InsertQuery query, String idColumn, String idValue) {
+    public ParameterizedExpression getInsertQuery(InsertQuery query, String idColumn, String idValue) {
         final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
         final List<ColumnValue> valuesToInsert = query.getColumnValueList();
 
         Stream<String> columnsStream = valuesToInsert.stream()
                 .map(ColumnValue::getColumn);
 
-        Stream<String> valueStream = valuesToInsert.stream()
+        Stream<Object> paramStream = valuesToInsert.stream()
                 .map(ColumnValue::getValue)
+                .filter(x -> !isValueCurrent(x))
                 .map(QueryHelper::toValue);
+
+        Stream<String> valuesStream = valuesToInsert.stream()
+                .map(ColumnValue::getValue)
+                .map(x -> isValueCurrent(x) ? "CURRENT" : "?");
 
         final String[] columns;
         final String[] values;
+        final Object[] params;
 
         if (query.hasIdColumn() && query.hasIdSequence()) {
             columns = Stream.concat(Stream.of(idColumn), columnsStream).toArray(String[]::new);
-            values = Stream.concat(Stream.of(idValue), valueStream).toArray(String[]::new);
+            params = Stream.concat(Stream.of(idValue), paramStream).toArray();
+            values = Stream.concat(Stream.of("?"), valuesStream).toArray(String[]::new);
+
         } else {
             columns = columnsStream.toArray(String[]::new);
-            values = valueStream.toArray(String[]::new);
+            params = paramStream.toArray();
+            values = valuesStream.toArray(String[]::new);
         }
-
-        return "INSERT INTO " + tableName + " (" + String.join(",", columns) + ") VALUES (" + String.join(",", values) + ")";
+        ParameterizedExpression expression = new ParameterizedExpression();
+        expression.setExpression("INSERT INTO " + tableName + " (" + String.join(",", columns) + ") VALUES ("
+                + String.join(",", values) + ")");
+        expression.setParameter(params);
+        return expression;
     }
 
-
-    public String getUpdateQuery(UpdateQuery query) {
+    public ParameterizedExpression getUpdateQuery(UpdateQuery query) {
         final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
 
         final List<ColumnValue> valuesToUpdate = query.getColumnValueList();
         final String[] columns = valuesToUpdate.stream().map(ColumnValue::getColumn).toArray(String[]::new);
-        final String[] values = valuesToUpdate.stream().map(ColumnValue::getValue).map(QueryHelper::toValue).toArray(String[]::new);
-
-        final String[] whereClause = query.getWhereList().stream()
-                .map(toWhereCriteria)
+        final String[] values = valuesToUpdate.stream().map(ColumnValue::getValue)
+                .map(x -> isValueCurrent(x) ? "CURRENT" : "?")
                 .toArray(String[]::new);
+        final Stream<Object> paramsStream = valuesToUpdate.stream()
+                .map(ColumnValue::getValue)
+                .filter(x -> !isValueCurrent(x))
+                .map(QueryHelper::toValue);
 
-        if (whereClause.length == 0) {
+        final List<ParameterizedExpression> whereClause = query.getWhereList().stream()
+                .map(toWhereCriteria).toList();
+
+        if (whereClause.isEmpty()) {
             throw new RuntimeException("Update query must have a where clause");
         }
+        final Object[] params = Stream
+                .concat(paramsStream,
+                        whereClause.stream().filter(x -> x.parameter.length > 0).map(x -> x.getParameter()[0]))
+                .toArray();
 
-        return "UPDATE "
+        ParameterizedExpression expression = new ParameterizedExpression();
+        expression.setExpression("UPDATE "
                 + tableName
-                + " SET " + String.join(",", zip(columns, values, (c, v) -> c + "=" + v ))
-                + " WHERE " + String.join(" AND ", whereClause);
+                + " SET " + String.join(",", zip(columns, values, (c, v) -> c + "=" + v))
+                + " WHERE "
+                + String.join(" AND ", whereClause.stream().map(x -> x.getExpression()).toArray(String[]::new)));
+        expression.setParameter(params);
+        return expression;
     }
 
-    public String getDeleteQuery(DeleteQuery query) {
+    public ParameterizedExpression getDeleteQuery(DeleteQuery query) {
         final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
 
-        final String[] whereClause = query.getWhereList().stream()
-                .map(toWhereCriteria)
-                .toArray(String[]::new);
+        final List<ParameterizedExpression> whereClause = query.getWhereList().stream()
+                .map(toWhereCriteria).toList();
 
-        if (whereClause.length == 0) {
+        if (whereClause.isEmpty()) {
             throw new IllegalArgumentException("Delete query must have a where clause");
         }
-
-        return "DELETE FROM "
+        ParameterizedExpression expression = new ParameterizedExpression();
+        expression.setExpression("DELETE FROM "
                 + tableName
-                + " WHERE " + String.join(" AND ", whereClause);
+                + " WHERE "
+                + String.join(" AND ", whereClause.stream().map(x -> x.getExpression()).toArray(String[]::new)));
+        expression.setParameter(
+                whereClause.stream().filter(x -> x.parameter.length > 0).map(x -> x.getParameter()[0]).toArray());
+        return expression;
     }
 
     public String getRawQuery(RawQuery query) {
@@ -127,13 +164,15 @@ public class QueryHelper {
         // Whitelist characters
         StringBuilder safeSQL = new StringBuilder();
         for (char c : sql.toCharArray()) {
-            if (Character.isLetterOrDigit(c) || c == ' ' || c == ',' || c == '(' || c == ')' || c == '=' || c == '<' || c == '>' || c == '_' || c == ':' || c == '.') {
+            if (Character.isLetterOrDigit(c) || c == ' ' || c == ',' || c == '(' || c == ')' || c == '=' || c == '<'
+                    || c == '>' || c == '_' || c == ':' || c == '.') {
                 safeSQL.append(c);
             }
         }
         sql = safeSQL.toString();
 
-        // replace single quotes with two single quotes to prevent SQL injection through strings
+        // replace single quotes with two single quotes to prevent SQL injection through
+        // strings
         sql = sql.replace("'", "''");
 
         return sql;
@@ -141,48 +180,66 @@ public class QueryHelper {
 
     private static final Function<Join, String> toJoin = (join) -> {
         final String joinType = join.getType().toString();
-        final String fromTable = join.hasFromTableSchema() ? join.getFromTableSchema() + ":" + join.getFromTable() : join.getFromTable();
-        final String joinTable = join.hasJoinTableSchema() ? join.getJoinTableSchema() + ":" + join.getJoinTable() : join.getJoinTable();
+        final String fromTable = join.hasFromTableSchema() ? join.getFromTableSchema() + ":" + join.getFromTable()
+                : join.getFromTable();
+        final String joinTable = join.hasJoinTableSchema() ? join.getJoinTableSchema() + ":" + join.getJoinTable()
+                : join.getJoinTable();
         final String fromColumn = join.getFromColumn();
         final String joinColumn = join.getJoinColumn();
 
-        return joinType + " JOIN " + joinTable + " ON " + joinTable + "." + joinColumn + " = " + fromTable + "." + fromColumn;
+        return joinType + " JOIN " + joinTable + " ON " + joinTable + "." + joinColumn + " = " + fromTable + "."
+                + fromColumn;
     };
 
-    private static final Function<WhereCriteria, String> toWhereCriteria = (criteria) -> {
+    private Function<WhereCriteria, ParameterizedExpression> toWhereCriteria = (criteria) -> {
         String key = criteria.getKey();
-        String value = toValue(criteria.getValue());
+        Object value = toValue(criteria.getValue());
+        ParameterizedExpression parameterizedExpression = new ParameterizedExpression();
 
-        return switch (criteria.getOperator()) {
-            case OPERATOR_EQUAL -> key + "=" + value;
-            case OPERATOR_NOT_EQUAL -> key + "<>" + value;
-            case OPERATOR_GREATER_THAN -> key + ">" + value;
-            case OPERATOR_GREATER_THAN_OR_EQUAL -> key + ">=" + value;
-            case OPERATOR_LESS_THAN -> key + "<" + value;
-            case OPERATOR_LESS_THAN_OR_EQUAL -> key + "<=" + value;
-            case OPERATOR_LIKE -> key + " LIKE " + value;
-            case OPERATOR_NOT_LIKE -> key + " NOT LIKE " + value;
-            case OPERATOR_IN -> key + " IN (" + value + ")";
-            case OPERATOR_NOT_IN -> key + " NOT IN (" + value + ")";
+        String clause = switch (criteria.getOperator()) {
+            case OPERATOR_EQUAL -> key + " = ?";
+            case OPERATOR_NOT_EQUAL -> key + " <> ?";
+            case OPERATOR_GREATER_THAN -> key + " > ?";
+            case OPERATOR_GREATER_THAN_OR_EQUAL -> key + " >= ?";
+            case OPERATOR_LESS_THAN -> key + " < ?";
+            case OPERATOR_LESS_THAN_OR_EQUAL -> key + " <= ?";
+            case OPERATOR_LIKE -> key + " LIKE ?";
+            case OPERATOR_NOT_LIKE -> key + " NOT LIKE ?";
+            case OPERATOR_IN -> key + " IN (?)";
+            case OPERATOR_NOT_IN -> key + " NOT IN (?)";
             case OPERATOR_IS_NULL -> key + " IS NULL";
             case OPERATOR_IS_NOT_NULL -> key + " IS NOT NULL";
             default -> null;
         };
+        if (!criteria.getOperator().equals(Operator.OPERATOR_IS_NULL)
+                && !criteria.getOperator().equals(Operator.OPERATOR_IS_NOT_NULL)
+                && isValueCurrent(criteria.getValue())) {
+            clause = clause.replace("?", "CURRENT");
+        } else if (value != null) {
+            parameterizedExpression.setParameter(new Object[] { value });
+        }
+        parameterizedExpression.setExpression(clause);
+        return parameterizedExpression;
     };
 
-
-    private static String toValue(Value value) {
+    private static Object toValue(Value value) {
         return switch (value.getValueCase()) {
-            case STRING_VALUE -> "'" + value.getStringValue() + "'";
-            case INT_VALUE -> String.valueOf(value.getIntValue());
-            case LONG_VALUE -> String.valueOf(value.getLongValue());
-            case DOUBLE_VALUE -> String.valueOf(value.getDoubleValue());
-            case FLOAT_VALUE -> String.valueOf(value.getFloatValue());
-            case BOOLEAN_VALUE -> String.valueOf(value.getBooleanValue());
-            case DATE_VALUE -> value.getDateValue().contains("CURRENT") ? value.getDateValue() : "'" + value.getDateValue() + "'";
-            case DATETIME_VALUE -> value.getDatetimeValue().contains("CURRENT") ? value.getDatetimeValue() : "'" + value.getDatetimeValue() + "'";
+            case STRING_VALUE -> value.getStringValue();
+            case INT_VALUE -> value.getIntValue();
+            case LONG_VALUE -> value.getLongValue();
+            case DOUBLE_VALUE -> value.getDoubleValue();
+            case FLOAT_VALUE -> value.getFloatValue();
+            case BOOLEAN_VALUE -> value.getBooleanValue();
+            case DATE_VALUE -> value.getDateValue();
+            case DATETIME_VALUE -> value.getDatetimeValue();
             case BLOB_VALUE, VALUE_NOT_SET -> null;
         };
+    }
+
+    private static boolean isValueCurrent(Value value) {
+        return (value.getValueCase().equals(ValueCase.DATE_VALUE) && value.getDateValue().equals("CURRENT"))
+                || (value.getValueCase().equals(ValueCase.DATETIME_VALUE)
+                        && value.getDatetimeValue().equals("CURRENT"));
     }
 
     private static String[] zip(String[] columns, String[] values, BiFunction<String, String, String> f) {

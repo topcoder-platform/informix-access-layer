@@ -5,6 +5,7 @@ import com.topcoder.dal.rdb.*;
 import com.topcoder.dal.util.IdGenerator;
 import com.topcoder.dal.util.QueryHelper;
 import com.topcoder.dal.util.StreamJdbcTemplate;
+import com.topcoder.dal.util.ParameterizedExpression;
 
 import io.grpc.stub.StreamObserver;
 import jdk.jshell.spi.ExecutionControl;
@@ -21,6 +22,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executors;
@@ -200,9 +202,10 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             }
             case SELECT -> {
                 final SelectQuery selectQuery = query.getSelect();
-                final String sql = queryHelper.getSelectQuery(selectQuery);
+                final ParameterizedExpression sql = queryHelper.getSelectQuery(selectQuery);
 
-                logger.info("Executing SQL query: {}", field(sql));
+                logger.info("Executing SQL query: {} with Params: {}", field(sql.getExpression()),
+                        Arrays.toString(sql.getParameter()));
 
                 final List<Column> columnList = selectQuery.getColumnList();
                 final int numColumns = columnList.size();
@@ -212,11 +215,13 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 }
                 List<Row> rows;
                 if (con != null) {
-                    rows = jdbcTemplate.query(sql,
-                            (rs, rowNum) -> selectQueryMapper(rs, rowNum, numColumns, columnTypeMap, columnList), con);
+                    rows = jdbcTemplate.query(sql.getExpression(),
+                            (rs, rowNum) -> selectQueryMapper(rs, rowNum, numColumns, columnTypeMap, columnList), con,
+                            sql.getParameter());
                 } else {
-                    rows = jdbcTemplate.query(sql,
-                            (rs, rowNum) -> selectQueryMapper(rs, rowNum, numColumns, columnTypeMap, columnList));
+                    rows = jdbcTemplate.query(sql.getExpression(),
+                            (rs, rowNum) -> selectQueryMapper(rs, rowNum, numColumns, columnTypeMap, columnList),
+                            sql.getParameter());
                 }
                 return QueryResponse.newBuilder()
                         .setSelectResult(SelectQueryResult.newBuilder().addAllRows(rows).build())
@@ -227,7 +232,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 final boolean shouldGenerateId = insertQuery.hasIdSequence()
                         && (insertQuery.hasIdColumn() || insertQuery.hasIdTable());
 
-                final String sql;
+                final ParameterizedExpression sql;
                 long id = 0;
                 if (shouldGenerateId) {
                     final String idColumn = insertQuery.getIdColumn();
@@ -240,12 +245,13 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     sql = queryHelper.getInsertQuery(insertQuery);
                 }
 
-                logger.info("Executing SQL query: {}", field(sql));
+                logger.info("Executing SQL query: {} with Params: {}", field(sql.getExpression()),
+                        Arrays.toString(sql.getParameter()));
 
                 if (con != null) {
-                    jdbcTemplate.update(sql, con);
+                    jdbcTemplate.update(sql.getExpression(), con, sql.getParameter());
                 } else {
-                    jdbcTemplate.update(sql);
+                    jdbcTemplate.update(sql.getExpression(), sql.getParameter());
                 }
 
                 InsertQueryResult.Builder insertQueryBuilder = InsertQueryResult.newBuilder();
@@ -259,15 +265,16 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             }
             case UPDATE -> {
                 final UpdateQuery updateQuery = query.getUpdate();
-                final String sql = queryHelper.getUpdateQuery(updateQuery);
+                final ParameterizedExpression sql = queryHelper.getUpdateQuery(updateQuery);
 
-                logger.info("Executing SQL query: {}", field(sql));
+                logger.info("Executing SQL query: {} with Params: {}", field(sql.getExpression()),
+                        Arrays.toString(sql.getParameter()));
 
                 int updateCount = 0;
                 if (con != null) {
-                    updateCount = jdbcTemplate.update(sql, con);
+                    updateCount = jdbcTemplate.update(sql.getExpression(), con, sql.getParameter());
                 } else {
-                    updateCount = jdbcTemplate.update(sql);
+                    updateCount = jdbcTemplate.update(sql.getExpression(), sql.getParameter());
                 }
                 return QueryResponse.newBuilder()
                         .setUpdateResult(UpdateQueryResult.newBuilder().setAffectedRows(updateCount).build())
@@ -275,15 +282,16 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             }
             case DELETE -> {
                 final DeleteQuery deleteQuery = query.getDelete();
-                final String sql = queryHelper.getDeleteQuery(deleteQuery);
+                final ParameterizedExpression sql = queryHelper.getDeleteQuery(deleteQuery);
 
-                logger.info("Executing SQL query: {}", field(sql));
+                logger.info("Executing SQL query: {} with Params: {}", field(sql.getExpression()),
+                        Arrays.toString(sql.getParameter()));
 
                 int deleteCount = 0;
                 if (con != null) {
-                    deleteCount = jdbcTemplate.update(sql, con);
+                    deleteCount = jdbcTemplate.update(sql.getExpression(), con, sql.getParameter());
                 } else {
-                    deleteCount = jdbcTemplate.update(sql);
+                    deleteCount = jdbcTemplate.update(sql.getExpression(), sql.getParameter());
                 }
                 return QueryResponse.newBuilder()
                         .setDeleteResult(DeleteQueryResult.newBuilder().setAffectedRows(deleteCount).build())
