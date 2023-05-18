@@ -165,7 +165,7 @@ public class QueryHelper {
         StringBuilder safeSQL = new StringBuilder();
         for (char c : sql.toCharArray()) {
             if (Character.isLetterOrDigit(c) || c == ' ' || c == ',' || c == '(' || c == ')' || c == '=' || c == '<'
-                    || c == '>' || c == '_' || c == ':' || c == '.') {
+                    || c == '>' || c == '_' || c == ':' || c == '.' || c == '-') {
                 safeSQL.append(c);
             }
         }
