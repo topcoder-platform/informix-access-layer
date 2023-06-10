@@ -120,7 +120,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             String columnName = rs.getMetaData().getColumnName(i + 1);
             switch (rs.getMetaData().getColumnType(i + 1)) {
                 case java.sql.Types.DECIMAL ->
-                    valueBuilder.setStringValue(rs.getBigDecimal(i + 1).toString());
+                    valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getBigDecimal(i + 1), "").toString());
                 case java.sql.Types.INTEGER -> valueBuilder.setIntValue(rs.getInt(i + 1));
                 case java.sql.Types.BIGINT -> valueBuilder.setLongValue(rs.getLong(i + 1));
                 case java.sql.Types.FLOAT -> valueBuilder.setFloatValue(rs.getFloat(i + 1));
