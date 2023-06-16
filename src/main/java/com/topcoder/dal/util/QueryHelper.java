@@ -5,7 +5,10 @@ import com.topcoder.dal.rdb.Value.ValueCase;
 
 import org.springframework.stereotype.Component;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -42,7 +45,7 @@ public class QueryHelper {
                 + (joins.length > 0 ? " " + String.join(" ", Stream.of(joins).map(toJoin).toArray(String[]::new)) : "")
                 + (!whereClause.isEmpty()
                         ? " WHERE " + String.join(" AND ",
-                                whereClause.stream().map(x -> x.getExpression()).toArray(String[]::new))
+                                whereClause.stream().map(ParameterizedExpression::getExpression).toArray(String[]::new))
                         : "")
                 + (groupByClause.length > 0 ? " GROUP BY " + String.join(",", groupByClause) : "")
                 + (orderByClause.length > 0 ? " ORDER BY " + String.join(",", orderByClause) : ""));
@@ -66,12 +69,12 @@ public class QueryHelper {
 
         Stream<Object> paramStream = valuesToInsert.stream()
                 .map(ColumnValue::getValue)
-                .filter(x -> !isValueCurrent(x))
+                .filter(x -> findSQLExpressionOrFunction(x).isEmpty())
                 .map(QueryHelper::toValue);
 
         Stream<String> valuesStream = valuesToInsert.stream()
                 .map(ColumnValue::getValue)
-                .map(x -> isValueCurrent(x) ? "CURRENT" : "?");
+                .map(x -> findSQLExpressionOrFunction(x).orElse("?"));
 
         final String[] columns;
         final String[] values;
@@ -81,12 +84,12 @@ public class QueryHelper {
             columns = Stream.concat(Stream.of(idColumn), columnsStream).toArray(String[]::new);
             params = Stream.concat(Stream.of(idValue), paramStream).toArray();
             values = Stream.concat(Stream.of("?"), valuesStream).toArray(String[]::new);
-
         } else {
             columns = columnsStream.toArray(String[]::new);
             params = paramStream.toArray();
             values = valuesStream.toArray(String[]::new);
         }
+
         ParameterizedExpression expression = new ParameterizedExpression();
         expression.setExpression("INSERT INTO " + tableName + " (" + String.join(",", columns) + ") VALUES ("
                 + String.join(",", values) + ")");
@@ -99,13 +102,16 @@ public class QueryHelper {
 
         final List<ColumnValue> valuesToUpdate = query.getColumnValueList();
         final String[] columns = valuesToUpdate.stream().map(ColumnValue::getColumn).toArray(String[]::new);
+
         final String[] values = valuesToUpdate.stream().map(ColumnValue::getValue)
-                .map(x -> isValueCurrent(x) ? "CURRENT" : "?")
+                .map(x -> findSQLExpressionOrFunction(x).orElse("?"))
                 .toArray(String[]::new);
+
         final Stream<Object> paramsStream = valuesToUpdate.stream()
                 .map(ColumnValue::getValue)
-                .filter(x -> !isValueCurrent(x))
+                .filter(x -> findSQLExpressionOrFunction(x).isEmpty())
                 .map(QueryHelper::toValue);
+
 
         final List<ParameterizedExpression> whereClause = query.getWhereList().stream()
                 .map(toWhereCriteria).toList();
@@ -123,7 +129,7 @@ public class QueryHelper {
                 + tableName
                 + " SET " + String.join(",", zip(columns, values, (c, v) -> c + "=" + v))
                 + " WHERE "
-                + String.join(" AND ", whereClause.stream().map(x -> x.getExpression()).toArray(String[]::new)));
+                + String.join(" AND ", whereClause.stream().map(ParameterizedExpression::getExpression).toArray(String[]::new)));
         expression.setParameter(params);
         return expression;
     }
@@ -141,7 +147,7 @@ public class QueryHelper {
         expression.setExpression("DELETE FROM "
                 + tableName
                 + " WHERE "
-                + String.join(" AND ", whereClause.stream().map(x -> x.getExpression()).toArray(String[]::new)));
+                + String.join(" AND ", whereClause.stream().map(ParameterizedExpression::getExpression).toArray(String[]::new)));
         expression.setParameter(
                 whereClause.stream().filter(x -> x.parameter.length > 0).map(x -> x.getParameter()[0]).toArray());
         return expression;
@@ -191,7 +197,7 @@ public class QueryHelper {
                 + fromColumn;
     };
 
-    private Function<WhereCriteria, ParameterizedExpression> toWhereCriteria = (criteria) -> {
+    private final Function<WhereCriteria, ParameterizedExpression> toWhereCriteria = (criteria) -> {
         String key = criteria.getKey();
         Object value = toValue(criteria.getValue());
         ParameterizedExpression parameterizedExpression = new ParameterizedExpression();
@@ -211,14 +217,18 @@ public class QueryHelper {
             case OPERATOR_IS_NOT_NULL -> key + " IS NOT NULL";
             default -> null;
         };
+        Optional<String> foundExpressionOrFunction = findSQLExpressionOrFunction(criteria.getValue());
+
         if (!criteria.getOperator().equals(Operator.OPERATOR_IS_NULL)
                 && !criteria.getOperator().equals(Operator.OPERATOR_IS_NOT_NULL)
-                && isValueCurrent(criteria.getValue())) {
-            clause = clause.replace("?", "CURRENT");
+                && foundExpressionOrFunction.isPresent()) {
+            clause = Objects.requireNonNull(clause).replace("?", foundExpressionOrFunction.get());
         } else if (value != null) {
             parameterizedExpression.setParameter(new Object[] { value });
         }
+
         parameterizedExpression.setExpression(clause);
+
         return parameterizedExpression;
     };
 
@@ -236,10 +246,24 @@ public class QueryHelper {
         };
     }
 
-    private static boolean isValueCurrent(Value value) {
-        return (value.getValueCase().equals(ValueCase.DATE_VALUE) && value.getDateValue().equals("CURRENT"))
-                || (value.getValueCase().equals(ValueCase.DATETIME_VALUE)
-                        && value.getDatetimeValue().equals("CURRENT"));
+    private static Optional<String> findSQLExpressionOrFunction(Value value) {
+        List<String> sqlExpressionsAndFunctions = Arrays.asList(
+                "CURRENT", "EXTEND", "DATE", "TODAY", "MDY", "YEAR", "MONTH",
+                "DAY", "HOUR", "MINUTE", "SECOND"
+        );
+
+        if (value.getValueCase().equals(ValueCase.DATE_VALUE)
+                || value.getValueCase().equals(ValueCase.DATETIME_VALUE)) {
+            String valueStr = value.getValueCase().equals(ValueCase.DATE_VALUE)
+                    ? value.getDateValue()
+                    : value.getDatetimeValue();
+
+            if (sqlExpressionsAndFunctions.stream().anyMatch(valueStr::contains)) {
+                return Optional.of(valueStr);
+            }
+        }
+
+        return Optional.empty();
     }
 
     private static String[] zip(String[] columns, String[] values, BiFunction<String, String, String> f) {
