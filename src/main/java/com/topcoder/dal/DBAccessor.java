@@ -319,7 +319,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
     public StreamObserver<QueryRequest> streamQuery(StreamObserver<QueryResponse> responseObserver) {
         return new StreamObserver<>() {
             Connection con = jdbcTemplate.getConnection();
-            private final Duration streamTimeout = Duration.ofSeconds(10);
+            private final Duration streamTimeout = Duration.ofSeconds(20);
             Duration DEBOUNCE_INTERVAL = Duration.ofMillis(100);
             AtomicLong lastTimerReset = new AtomicLong(System.nanoTime() - DEBOUNCE_INTERVAL.toNanos() - 1);
             private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
