@@ -326,9 +326,15 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
             AtomicLong lastTimerReset = new AtomicLong(System.nanoTime() - DEBOUNCE_INTERVAL.toNanos() - 1);
             private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
             AtomicReference<ScheduledFuture<?>> streamTimeoutFuture = new AtomicReference<>(scheduleStreamTimeout());
+            private Boolean isStreamAlive = true;
 
             @Override
             public void onNext(QueryRequest request) {
+                if (!isStreamAlive) {
+                    responseObserver.onError(Status.DEADLINE_EXCEEDED.withDescription("Stream closed due to inactivity")
+                            .asRuntimeException());
+                    return;
+                }
                 cancelStreamTimeout();
                 try {
                     QueryResponse response = executeQuery(request.getQuery(), con);
@@ -350,9 +356,11 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
             @Override
             public void onCompleted() {
-                cancelStreamTimeout();
-                commit();
-                responseObserver.onCompleted();
+                if (isStreamAlive) {
+                    cancelStreamTimeout();
+                    commit();
+                    responseObserver.onCompleted();
+                }
             }
 
             private void commit() {
@@ -362,6 +370,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
             private void rollback() {
                 logger.info("Rolling back transaction");
+                isStreamAlive = false;
                 jdbcTemplate.rollback(con);
             }
 
@@ -390,7 +399,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     logger.error(message);
                     rollback();
                     cancelStreamTimeout();
-                    responseObserver.onError(Status.DEADLINE_EXCEEDED.withDescription(message).asRuntimeException());
+                    responseObserver.onCompleted();
                 }, streamTimeout.plus(DEBOUNCE_INTERVAL).toNanos(), TimeUnit.NANOSECONDS);
             }
         };
