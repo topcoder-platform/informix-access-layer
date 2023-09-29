@@ -7,6 +7,7 @@ import com.topcoder.dal.util.QueryHelper;
 import com.topcoder.dal.util.StreamJdbcTemplate;
 import com.topcoder.dal.util.ParameterizedExpression;
 
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import jdk.jshell.spi.ExecutionControl;
 import net.devh.boot.grpc.server.service.GrpcService;
@@ -327,10 +328,11 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
             @Override
             public void onNext(QueryRequest request) {
-                resetStreamTimeout();
+                cancelStreamTimeout();
                 try {
                     QueryResponse response = executeQuery(request.getQuery(), con);
                     responseObserver.onNext(response);
+                    resetStreamTimeout();
                 } catch (Exception e) {
                     rollback();
                     cancelStreamTimeout();
@@ -387,7 +389,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                     logger.error(message);
                     rollback();
                     cancelStreamTimeout();
-                    responseObserver.onCompleted();
+                    responseObserver.onError(Status.DEADLINE_EXCEEDED.withDescription(message).asRuntimeException());
                 }, streamTimeout.plus(DEBOUNCE_INTERVAL).toNanos(), TimeUnit.NANOSECONDS);
             }
         };
