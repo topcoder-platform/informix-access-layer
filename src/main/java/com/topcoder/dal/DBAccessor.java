@@ -379,7 +379,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
             private boolean cancelStreamTimeout() {
                 ScheduledFuture<?> currentFuture = streamTimeoutFuture.get();
-                return currentFuture == null || currentFuture.cancel(false);
+                return currentFuture == null || currentFuture.isCancelled() || currentFuture.cancel(false);
             }
 
             private ScheduledFuture<?> scheduleStreamTimeout() {
