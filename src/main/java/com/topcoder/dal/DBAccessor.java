@@ -318,6 +318,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
     @Override
     public StreamObserver<QueryRequest> streamQuery(StreamObserver<QueryResponse> responseObserver) {
+        logger.info("Stream started");
         return new StreamObserver<>() {
             Connection con = jdbcTemplate.getConnection();
             private final Duration streamTimeout = Duration.ofSeconds(20);
