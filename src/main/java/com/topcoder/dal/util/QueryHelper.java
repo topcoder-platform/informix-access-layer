@@ -17,7 +17,7 @@ import java.util.stream.Stream;
 public class QueryHelper {
 
     public ParameterizedExpression getSelectQuery(SelectQuery query) {
-        final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
+        final String table = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
 
         List<Column> columnsList = query.getColumnList();
 
@@ -41,7 +41,7 @@ public class QueryHelper {
         expression.setExpression("SELECT"
                 + (offset > 0 ? " SKIP " + offset : "")
                 + (limit > 0 ? " FIRST " + limit : "")
-                + (" " + String.join(",", columns) + " FROM " + tableName)
+                + (" " + String.join(",", columns) + " FROM " + table + (query.hasSchema() ? " " + query.getTable() : ""))
                 + (joins.length > 0 ? " " + String.join(" ", Stream.of(joins).map(toJoin).toArray(String[]::new)) : "")
                 + (!whereClause.isEmpty()
                         ? " WHERE " + String.join(" AND ",
@@ -185,15 +185,18 @@ public class QueryHelper {
     }
 
     private static final Function<Join, String> toJoin = (join) -> {
-        final String joinType = join.getType().toString();
+        final String joinType = join.getType().toString().replace("JOIN_TYPE_", "");
+        final String joinTableName = join.getJoinTable();
+
         final String fromTable = join.hasFromTableSchema() ? join.getFromTableSchema() + ":" + join.getFromTable()
                 : join.getFromTable();
-        final String joinTable = join.hasJoinTableSchema() ? join.getJoinTableSchema() + ":" + join.getJoinTable()
+        final String joinTable = join.hasJoinTableSchema() ? join.getJoinTableSchema() + ":" + joinTableName + " " + joinTableName
                 : join.getJoinTable();
+
         final String fromColumn = join.getFromColumn();
         final String joinColumn = join.getJoinColumn();
 
-        return joinType + " JOIN " + joinTable + " ON " + joinTable + "." + joinColumn + " = " + fromTable + "."
+        return joinType + " JOIN " + joinTable + " ON " + joinTableName + "." + joinColumn + " = " + fromTable + "."
                 + fromColumn;
     };
 
