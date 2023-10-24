@@ -7,6 +7,7 @@ import com.topcoder.dal.util.QueryHelper;
 import com.topcoder.dal.util.StreamJdbcTemplate;
 import com.topcoder.dal.util.ParameterizedExpression;
 
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import jdk.jshell.spi.ExecutionControl;
 import net.devh.boot.grpc.server.service.GrpcService;
@@ -317,20 +318,28 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
     @Override
     public StreamObserver<QueryRequest> streamQuery(StreamObserver<QueryResponse> responseObserver) {
+        logger.info("Stream started");
         return new StreamObserver<>() {
             Connection con = jdbcTemplate.getConnection();
-            private final Duration streamTimeout = Duration.ofSeconds(10);
+            private final Duration streamTimeout = Duration.ofSeconds(20);
             Duration DEBOUNCE_INTERVAL = Duration.ofMillis(100);
             AtomicLong lastTimerReset = new AtomicLong(System.nanoTime() - DEBOUNCE_INTERVAL.toNanos() - 1);
             private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
             AtomicReference<ScheduledFuture<?>> streamTimeoutFuture = new AtomicReference<>(scheduleStreamTimeout());
+            private Boolean isStreamAlive = true;
 
             @Override
             public void onNext(QueryRequest request) {
-                resetStreamTimeout();
+                if (!isStreamAlive) {
+                    responseObserver.onError(Status.DEADLINE_EXCEEDED.withDescription("Stream closed due to inactivity")
+                            .asRuntimeException());
+                    return;
+                }
+                cancelStreamTimeout();
                 try {
                     QueryResponse response = executeQuery(request.getQuery(), con);
                     responseObserver.onNext(response);
+                    resetStreamTimeout();
                 } catch (Exception e) {
                     rollback();
                     cancelStreamTimeout();
@@ -347,9 +356,11 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
             @Override
             public void onCompleted() {
-                cancelStreamTimeout();
-                commit();
-                responseObserver.onCompleted();
+                if (isStreamAlive) {
+                    cancelStreamTimeout();
+                    commit();
+                    responseObserver.onCompleted();
+                }
             }
 
             private void commit() {
@@ -359,6 +370,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
             private void rollback() {
                 logger.info("Rolling back transaction");
+                isStreamAlive = false;
                 jdbcTemplate.rollback(con);
             }
 
@@ -377,7 +389,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
 
             private boolean cancelStreamTimeout() {
                 ScheduledFuture<?> currentFuture = streamTimeoutFuture.get();
-                return currentFuture == null || currentFuture.cancel(false);
+                return currentFuture == null || currentFuture.isCancelled() || currentFuture.cancel(false);
             }
 
             private ScheduledFuture<?> scheduleStreamTimeout() {
