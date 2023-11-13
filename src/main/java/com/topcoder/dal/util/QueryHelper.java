@@ -5,31 +5,60 @@ import com.topcoder.dal.rdb.Value.ValueCase;
 
 import org.springframework.stereotype.Component;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
 @Component
 public class QueryHelper {
+    private final AtomicInteger aliasCounter = new AtomicInteger(0);
+
+    private String generateAlias(String fullTableName) {
+        String[] parts = fullTableName.split(":");
+        String tableName = parts.length > 1 ? parts[1] : parts[0];
+        String prefix = tableName.substring(0, 1).toLowerCase();
+        return prefix + aliasCounter.incrementAndGet();
+    }
+
 
     public ParameterizedExpression getSelectQuery(SelectQuery query) {
-        final String tableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
+        aliasCounter.set(0);
 
+        final HashMap<String, String> tableAliases = new HashMap<>();
+        final String primaryTableName = query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable();
+        final String tableAlias = generateAlias(primaryTableName);
+        tableAliases.put(primaryTableName, tableAlias);
+
+        final String table = (query.hasSchema() ? query.getSchema() + ":" + query.getTable() : query.getTable()) + " " + tableAlias;
         List<Column> columnsList = query.getColumnList();
 
+        final Join[] joins = query.getJoinList().toArray(new Join[0]);
+        for (Join join : joins) {
+            tableAliases.computeIfAbsent(join.hasFromTableSchema() ? join.getFromTableSchema() + ":" + join.getFromTable() : join.getFromTable(), this::generateAlias);
+            tableAliases.computeIfAbsent(join.hasJoinTableSchema() ? join.getJoinTableSchema() + ":" + join.getJoinTable() : join.getJoinTable(), this::generateAlias);
+        }
+
         final String[] columns = columnsList.stream()
-                .map((column -> column.hasTableName() ? column.getTableName() + "." + column.getName()
-                        : column.getName()))
+                .map(column -> column.hasTableName()
+                        ? tableAliases.getOrDefault(column.getTableName(), tableAlias) + "." + column.getName() // TODO: This keeps current systems working correctly. Plan to update proto definition of ColumnValue to include schema
+                        : tableAlias + "." + column.getName())
                 .toArray(String[]::new);
 
         final List<ParameterizedExpression> whereClause = query.getWhereList().stream()
-                .map(toWhereCriteria).toList();
-
-        final Join[] joins = query.getJoinList().toArray(new Join[0]);
+                .map((criteria) -> {
+                    ParameterizedExpression parameterizedExpression = toWhereCriteria.apply(criteria);
+                    final String key = criteria.getKey();
+                    final String[] parts = key.split("\\.");
+                    if (parts.length > 1) {
+                        parameterizedExpression.setExpression(parameterizedExpression.getExpression().replace(key, tableAliases.get(parts[0]) + "." + parts[1]));
+                    } else {
+                        parameterizedExpression.setExpression(parameterizedExpression.getExpression().replace(key, tableAlias + "." + key));
+                    }
+                    return parameterizedExpression;
+                })
+                .toList();
 
         final String[] groupByClause = query.getGroupByList().toArray(new String[0]);
         final String[] orderByClause = query.getOrderByList().toArray(new String[0]);
@@ -41,8 +70,8 @@ public class QueryHelper {
         expression.setExpression("SELECT"
                 + (offset > 0 ? " SKIP " + offset : "")
                 + (limit > 0 ? " FIRST " + limit : "")
-                + (" " + String.join(",", columns) + " FROM " + tableName)
-                + (joins.length > 0 ? " " + String.join(" ", Stream.of(joins).map(toJoin).toArray(String[]::new)) : "")
+                + (" " + String.join(",", columns) + " FROM " + table)
+                + (joins.length > 0 ? " " + String.join(" ", Stream.of(joins).map(join -> toJoin(join, tableAliases)).toArray(String[]::new)) : "")
                 + (!whereClause.isEmpty()
                         ? " WHERE " + String.join(" AND ",
                                 whereClause.stream().map(ParameterizedExpression::getExpression).toArray(String[]::new))
@@ -184,18 +213,20 @@ public class QueryHelper {
         return sql;
     }
 
-    private static final Function<Join, String> toJoin = (join) -> {
-        final String joinType = join.getType().toString();
-        final String fromTable = join.hasFromTableSchema() ? join.getFromTableSchema() + ":" + join.getFromTable()
-                : join.getFromTable();
-        final String joinTable = join.hasJoinTableSchema() ? join.getJoinTableSchema() + ":" + join.getJoinTable()
-                : join.getJoinTable();
+    public String toJoin(Join join, HashMap<String, String> tableAliases) {
+        final String joinType = join.getType().toString().replace("JOIN_TYPE_", "");
+
+        final String joinTableName = join.hasJoinTableSchema() ? join.getJoinTableSchema() + ":" + join.getJoinTable() : join.getJoinTable();
+        final String fromTableName = join.hasFromTableSchema() ? join.getFromTableSchema() + ":" + join.getFromTable() : join.getFromTable();
+
+        final String joinTableAlias = tableAliases.getOrDefault(joinTableName, generateAlias(joinTableName));
+        final String fromTableAlias = tableAliases.getOrDefault(fromTableName, generateAlias(fromTableName));
+
         final String fromColumn = join.getFromColumn();
         final String joinColumn = join.getJoinColumn();
 
-        return joinType + " JOIN " + joinTable + " ON " + joinTable + "." + joinColumn + " = " + fromTable + "."
-                + fromColumn;
-    };
+        return joinType + " JOIN " + joinTableName + " AS " + joinTableAlias + " ON " + joinTableAlias + "." + joinColumn + " = " + fromTableAlias + "." + fromColumn;
+    }
 
     private final Function<WhereCriteria, ParameterizedExpression> toWhereCriteria = (criteria) -> {
         String key = criteria.getKey();
