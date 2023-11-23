@@ -192,7 +192,7 @@ public class QueryHelper {
         }
 
         // Limit the length of the SQL statement to prevent very long strings
-        if (sql.length() > 1000) {
+        if (sql.length() > 2000) {
             throw new IllegalArgumentException("SQL statement length exceeds the allowed limit");
         }
 
