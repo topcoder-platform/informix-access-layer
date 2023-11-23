@@ -208,7 +208,7 @@ public class QueryHelper {
 
         // replace single quotes with two single quotes to prevent SQL injection through
         // strings
-        sql = sql.replace("'", "''");
+        // sql = sql.replace("'", "''");
 
         return sql;
     }
