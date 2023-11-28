@@ -126,7 +126,7 @@ public class DBAccessor extends QueryServiceGrpc.QueryServiceImplBase {
                 case java.sql.Types.BIGINT -> valueBuilder.setLongValue(rs.getLong(i + 1));
                 case java.sql.Types.FLOAT -> valueBuilder.setFloatValue(rs.getFloat(i + 1));
                 case java.sql.Types.DOUBLE -> valueBuilder.setDoubleValue(rs.getDouble(i + 1));
-                case java.sql.Types.VARCHAR ->
+                case java.sql.Types.VARCHAR, java.sql.Types.CHAR ->
                     valueBuilder.setStringValue(Objects.requireNonNullElse(rs.getString(i + 1), ""));
                 case java.sql.Types.BOOLEAN -> valueBuilder.setBooleanValue(rs.getBoolean(i + 1));
                 case java.sql.Types.DATE, java.sql.Types.TIMESTAMP -> valueBuilder

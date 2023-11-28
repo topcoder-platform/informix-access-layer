@@ -192,7 +192,7 @@ public class QueryHelper {
         }
 
         // Limit the length of the SQL statement to prevent very long strings
-        if (sql.length() > 1000) {
+        if (sql.length() > 2000) {
             throw new IllegalArgumentException("SQL statement length exceeds the allowed limit");
         }
 
@@ -200,7 +200,8 @@ public class QueryHelper {
         StringBuilder safeSQL = new StringBuilder();
         for (char c : sql.toCharArray()) {
             if (Character.isLetterOrDigit(c) || c == ' ' || c == ',' || c == '(' || c == ')' || c == '=' || c == '<'
-                    || c == '>' || c == '_' || c == ':' || c == '.' || c == '-' || c == '+' || c == '*' || c == '\'') {
+                    || c == '>' || c == '_' || c == ':' || c == '.' || c == '-' || c == '+' || c == '*' || c == '\''
+                    || c == '!') {
                 safeSQL.append(c);
             }
         }
@@ -208,7 +209,7 @@ public class QueryHelper {
 
         // replace single quotes with two single quotes to prevent SQL injection through
         // strings
-        sql = sql.replace("'", "''");
+        // sql = sql.replace("'", "''");
 
         return sql;
     }
