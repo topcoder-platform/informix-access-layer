@@ -119,6 +119,7 @@ public class StreamJdbcTemplate extends JdbcTemplate {
 
     public int update(final String sql, Connection con) throws DataAccessException {
         Assert.notNull(sql, "SQL must not be null");
+        applyLockModeWaitSetting(con);
 
         class UpdateStatementCallback implements StatementCallback<Integer>, SqlProvider {
             @Override
@@ -149,6 +150,8 @@ public class StreamJdbcTemplate extends JdbcTemplate {
 
     private int update(final PreparedStatementCreator psc, @Nullable final PreparedStatementSetter pss, Connection con)
             throws DataAccessException {
+
+        applyLockModeWaitSetting(con);
 
         return updateCount(execute(psc, ps -> {
             try {
@@ -329,11 +332,22 @@ public class StreamJdbcTemplate extends JdbcTemplate {
         if (con == null) {
             return;
         }
+        applyLockModeWaitSetting(con);
         try (Statement stmt = con.createStatement()) {
-            stmt.execute(LOCK_MODE_SQL);
             stmt.execute(ISOLATION_SQL);
         } catch (SQLException ex) {
-            logger.warn("Could not apply read session settings", ex);
+            logger.warn("Could not apply read isolation setting", ex);
+        }
+    }
+
+    private void applyLockModeWaitSetting(@Nullable Connection con) {
+        if (con == null) {
+            return;
+        }
+        try (Statement stmt = con.createStatement()) {
+            stmt.execute(LOCK_MODE_SQL);
+        } catch (SQLException ex) {
+            logger.warn("Could not apply lock wait setting", ex);
         }
     }
 
