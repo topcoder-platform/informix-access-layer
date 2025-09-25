@@ -255,8 +255,10 @@ public class StreamJdbcTemplate extends JdbcTemplate {
                 throw new IllegalStateException("DataSource returned null from getConnection(): " + getDataSource());
             }
             con.setAutoCommit(false);
+            logger.info("Opened JDBC connection; applying USELASTCOMMITTED=ALL");
             try (Statement stmt = con.createStatement()) {
                 stmt.execute("SET ENVIRONMENT USELASTCOMMITTED 'ALL'");
+                logger.info("Applied USELASTCOMMITTED=ALL on connection");
             } catch (SQLException ex) {
                 logger.warn("Could not set USELASTCOMMITTED environment", ex);
             }
