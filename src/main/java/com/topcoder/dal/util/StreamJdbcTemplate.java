@@ -28,7 +28,7 @@ import org.springframework.util.Assert;
 
 public class StreamJdbcTemplate extends JdbcTemplate {
 
-    private static final String LOCK_MODE_SQL = "SET LOCK MODE TO WAIT 10";
+    private static final String LOCK_MODE_SQL = "SET LOCK MODE TO WAIT 25";
     private static final String ISOLATION_SQL = "SET ISOLATION TO COMMITTED READ LAST COMMITTED";
 
     private Logger logger = LoggerFactory.getLogger(this.getClass());
