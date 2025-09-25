@@ -258,8 +258,9 @@ public class StreamJdbcTemplate extends JdbcTemplate {
     }
 
     public Connection getConnection() throws CannotGetJdbcConnectionException {
+        Connection con = null;
         try {
-            Connection con = getDataSource().getConnection();
+            con = getDataSource().getConnection();
             if (con == null) {
                 throw new IllegalStateException("DataSource returned null from getConnection(): " + getDataSource());
             }
@@ -272,9 +273,8 @@ public class StreamJdbcTemplate extends JdbcTemplate {
                 logger.warn("Could not set USELASTCOMMITTED environment", ex);
             }
             return con;
-        } catch (SQLException ex) {
-            throw new CannotGetJdbcConnectionException("Failed to obtain JDBC Connection", ex);
-        } catch (IllegalStateException ex) {
+        } catch (SQLException | IllegalStateException ex) {
+            closeConnection(con);
             throw new CannotGetJdbcConnectionException("Failed to obtain JDBC Connection", ex);
         }
     }
