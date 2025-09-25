@@ -28,6 +28,9 @@ import org.springframework.util.Assert;
 
 public class StreamJdbcTemplate extends JdbcTemplate {
 
+    private static final String LOCK_MODE_SQL = "SET LOCK MODE TO WAIT 10";
+    private static final String ISOLATION_SQL = "SET ISOLATION TO COMMITTED READ LAST COMMITTED";
+
     private Logger logger = LoggerFactory.getLogger(this.getClass());
 
     public StreamJdbcTemplate(DataSource dataSource) {
@@ -62,6 +65,7 @@ public class StreamJdbcTemplate extends JdbcTemplate {
             throws DataAccessException {
 
         Assert.notNull(rse, "ResultSetExtractor must not be null");
+        applyReadSessionSettings(con);
 
         return execute(psc, new PreparedStatementCallback<T>() {
             @Override
@@ -88,6 +92,8 @@ public class StreamJdbcTemplate extends JdbcTemplate {
     public <T> T query(final String sql, final ResultSetExtractor<T> rse, Connection con) throws DataAccessException {
         Assert.notNull(sql, "SQL must not be null");
         Assert.notNull(rse, "ResultSetExtractor must not be null");
+
+        applyReadSessionSettings(con);
 
         class QueryStatementCallback implements StatementCallback<T>, SqlProvider {
             @Override
@@ -316,6 +322,18 @@ public class StreamJdbcTemplate extends JdbcTemplate {
             } catch (Throwable ex) {
                 logger.error("Unexpected exception on setting transaction level", ex);
             }
+        }
+    }
+
+    private void applyReadSessionSettings(@Nullable Connection con) {
+        if (con == null) {
+            return;
+        }
+        try (Statement stmt = con.createStatement()) {
+            stmt.execute(LOCK_MODE_SQL);
+            stmt.execute(ISOLATION_SQL);
+        } catch (SQLException ex) {
+            logger.warn("Could not apply read session settings", ex);
         }
     }
 
