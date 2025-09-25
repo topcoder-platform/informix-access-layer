@@ -255,6 +255,11 @@ public class StreamJdbcTemplate extends JdbcTemplate {
                 throw new IllegalStateException("DataSource returned null from getConnection(): " + getDataSource());
             }
             con.setAutoCommit(false);
+            try (Statement stmt = con.createStatement()) {
+                stmt.execute("SET ENVIRONMENT USELASTCOMMITTED 'ALL'");
+            } catch (SQLException ex) {
+                logger.warn("Could not set USELASTCOMMITTED environment", ex);
+            }
             return con;
         } catch (SQLException ex) {
             throw new CannotGetJdbcConnectionException("Failed to obtain JDBC Connection", ex);
