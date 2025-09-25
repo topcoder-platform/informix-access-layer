@@ -273,7 +273,10 @@ public class StreamJdbcTemplate extends JdbcTemplate {
                 logger.warn("Could not set USELASTCOMMITTED environment", ex);
             }
             return con;
-        } catch (SQLException | IllegalStateException ex) {
+        } catch (SQLException ex) {
+            closeConnection(con);
+            throw new CannotGetJdbcConnectionException("Failed to obtain JDBC Connection", ex);
+        } catch (IllegalStateException ex) {
             closeConnection(con);
             throw new CannotGetJdbcConnectionException("Failed to obtain JDBC Connection", ex);
         }
