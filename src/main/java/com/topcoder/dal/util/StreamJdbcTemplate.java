@@ -6,6 +6,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Locale;
 
 import javax.sql.DataSource;
 
@@ -28,10 +29,19 @@ import org.springframework.util.Assert;
 
 public class StreamJdbcTemplate extends JdbcTemplate {
 
-    private static final String LOCK_MODE_SQL = "SET LOCK MODE TO WAIT 10";
+    private static final int DEFAULT_LOCK_MODE_WAIT_SECONDS = 10;
+    private static final int LOCK_MODE_WAIT_INCREMENT_SECONDS = 10;
+    private static final int LOCK_MODE_WAIT_MAX_SECONDS = 30;
     private static final String ISOLATION_SQL = "SET ISOLATION TO COMMITTED READ LAST COMMITTED";
+    private static final int INFORMIX_POSITION_ERROR = -243;
+    private static final int INFORMIX_LOCK_TIMEOUT_ERROR = -143;
+    private static final String INFORMIX_SQL_STATE = "IX000";
+    private static final int LOCK_TIMEOUT_MAX_RETRIES = 3;
+    private static final long LOCK_TIMEOUT_RETRY_BACKOFF_MS = 200L;
 
     private Logger logger = LoggerFactory.getLogger(this.getClass());
+
+    private final ThreadLocal<Integer> lockModeWaitOverride = new ThreadLocal<>();
 
     public StreamJdbcTemplate(DataSource dataSource) {
         super(dataSource);
@@ -49,7 +59,8 @@ public class StreamJdbcTemplate extends JdbcTemplate {
     @Nullable
     public <T> T query(String sql, @Nullable Object[] args, ResultSetExtractor<T> rse, Connection con)
             throws DataAccessException {
-        return query(sql, newArgPreparedStatementSetter(args), rse, con);
+        return withLockTimeoutRetry(con, sql,
+                () -> query(sql, newArgPreparedStatementSetter(args), rse, con));
     }
 
     @Nullable
@@ -90,6 +101,11 @@ public class StreamJdbcTemplate extends JdbcTemplate {
 
     @Nullable
     public <T> T query(final String sql, final ResultSetExtractor<T> rse, Connection con) throws DataAccessException {
+        return withLockTimeoutRetry(con, sql, () -> queryInternal(sql, rse, con));
+    }
+
+    private <T> T queryInternal(final String sql, final ResultSetExtractor<T> rse, Connection con)
+            throws DataAccessException {
         Assert.notNull(sql, "SQL must not be null");
         Assert.notNull(rse, "ResultSetExtractor must not be null");
 
@@ -237,6 +253,120 @@ public class StreamJdbcTemplate extends JdbcTemplate {
         return result;
     }
 
+    @FunctionalInterface
+    private interface DataAccessCallback<T> {
+        T doWithDataAccess() throws DataAccessException;
+    }
+
+    private <T> T withLockTimeoutRetry(@Nullable Connection con, @Nullable String sql, DataAccessCallback<T> action)
+            throws DataAccessException {
+        int attempt = 0;
+        Integer previousOverride = lockModeWaitOverride.get();
+        boolean lockWaitAdjusted = false;
+        try {
+            while (true) {
+                try {
+                    return action.doWithDataAccess();
+                } catch (DataAccessException ex) {
+                    if (!isInformixLockTimeout(ex) || attempt >= LOCK_TIMEOUT_MAX_RETRIES) {
+                        throw ex;
+                    }
+                    attempt++;
+                    long delay = LOCK_TIMEOUT_RETRY_BACKOFF_MS * attempt;
+                    Throwable cause = ex.getMostSpecificCause();
+                    String causeMessage = cause != null ? cause.getMessage() : ex.getMessage();
+                    String sqlForLog = sql != null ? sql : "<unknown>";
+                    String waitDescription = "unchanged (connection not supplied)";
+                    if (con != null) {
+                        int waitSeconds = computeLockModeWaitSeconds(attempt);
+                        setLockModeWaitOverride(waitSeconds);
+                        applyLockModeWaitSetting(con);
+                        waitDescription = describeLockModeWait(waitSeconds);
+                        lockWaitAdjusted = true;
+                    }
+                    logger.warn(
+                            "Informix lock timeout detected for SQL [{}] (attempt {}/{}). "
+                                    + "Increasing lock wait to {} and retrying after {} ms. Cause: {}",
+                            sqlForLog,
+                            attempt,
+                            LOCK_TIMEOUT_MAX_RETRIES,
+                            waitDescription,
+                            delay,
+                            causeMessage);
+                    if (delay > 0) {
+                        try {
+                            Thread.sleep(delay);
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw ex;
+                        }
+                    }
+                }
+            }
+        } finally {
+            if (previousOverride == null) {
+                setLockModeWaitOverride(null);
+            } else {
+                setLockModeWaitOverride(previousOverride);
+            }
+            if (con != null && lockWaitAdjusted) {
+                applyLockModeWaitSetting(con);
+            }
+        }
+    }
+
+    private void setLockModeWaitOverride(@Nullable Integer waitSeconds) {
+        if (waitSeconds == null) {
+            lockModeWaitOverride.remove();
+        } else {
+            lockModeWaitOverride.set(waitSeconds);
+        }
+    }
+
+    private String describeLockModeWait(int waitSeconds) {
+        return waitSeconds < 0 ? "indefinite" : waitSeconds + "s";
+    }
+
+    private int computeLockModeWaitSeconds(int attempt) {
+        long candidate = (long) DEFAULT_LOCK_MODE_WAIT_SECONDS
+                + (long) attempt * LOCK_MODE_WAIT_INCREMENT_SECONDS;
+        if (LOCK_MODE_WAIT_MAX_SECONDS > 0 && candidate > LOCK_MODE_WAIT_MAX_SECONDS) {
+            return -1;
+        }
+        return (int) Math.min(candidate, Integer.MAX_VALUE);
+    }
+
+    private String resolveLockModeWaitSql() {
+        Integer override = lockModeWaitOverride.get();
+        int waitSeconds = override != null ? override : DEFAULT_LOCK_MODE_WAIT_SECONDS;
+        return lockModeWaitSql(waitSeconds);
+    }
+
+    private static String lockModeWaitSql(int waitSeconds) {
+        return waitSeconds <= 0 ? "SET LOCK MODE TO WAIT" : "SET LOCK MODE TO WAIT " + waitSeconds;
+    }
+
+    private boolean isInformixLockTimeout(@Nullable Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof SQLException sqlEx) {
+                int errorCode = sqlEx.getErrorCode();
+                if (errorCode == INFORMIX_POSITION_ERROR || errorCode == INFORMIX_LOCK_TIMEOUT_ERROR) {
+                    return true;
+                }
+                String sqlState = sqlEx.getSQLState();
+                if (sqlState != null && INFORMIX_SQL_STATE.equals(sqlState)) {
+                    String message = sqlEx.getMessage();
+                    if (message != null && message.toLowerCase(Locale.ROOT).contains("lock timeout")) {
+                        return true;
+                    }
+                }
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
     private static class SimplePreparedStatementCreator implements PreparedStatementCreator, SqlProvider {
 
         private final String sql;
@@ -348,7 +478,7 @@ public class StreamJdbcTemplate extends JdbcTemplate {
             return;
         }
         try (Statement stmt = con.createStatement()) {
-            stmt.execute(LOCK_MODE_SQL);
+            stmt.execute(resolveLockModeWaitSql());
         } catch (SQLException ex) {
             logger.warn("Could not apply lock wait setting", ex);
         }
